@@ -1,17 +1,10 @@
 <!DOCTYPE html>
-<!--
-  Plain Kanban — single-file offline-capable Kanban app
-  Data: plain text "database" in localStorage + export/import
-  Reactivity: Alpine.js v3 (CDN, ~15 KB gzip) — chosen for zero-build, minimal API
-  Icons: Feather Icons (CDN, SVG sprite)
-  Font: Inter via Google Fonts
-  No build step. Open index.html directly in any modern browser.
--->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Plain Kanban</title>
+  <title>Flat Kanban</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234a7cf7' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='7' height='18' rx='1'/><rect x='14' y='3' width='7' height='11' rx='1'/></svg>" />
 
   <!-- Inter typeface ─ display=swap avoids FOIT -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -126,7 +119,6 @@
     html, body {
       height: 100%;
       font-family: var(--font);
-      font-size: 14px;
       line-height: 1.5;
       color: var(--text);
       background: var(--bg);
@@ -230,8 +222,8 @@
       flex-direction: column;
     }
 
-    /* ─── SUB-HEADER (filters) ─── */
-    #subheader {
+    /* ── SUB-HEADER (shared layout) ── */
+    #subheader, #list-subheader {
       flex-shrink: 0;
       display: flex;
       align-items: center;
@@ -340,6 +332,17 @@
       font-weight: 600;
       font-size: 0.8125rem;
       text-transform: capitalize;
+      color: hsl(var(--tag-hue, 214), 60%, 40%);
+    }
+
+    [data-theme="dark"] .column-tag-name {
+      color: hsl(var(--tag-hue, 214), 70%, 65%);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) .column-tag-name {
+        color: hsl(var(--tag-hue, 214), 70%, 65%);
+      }
     }
 
     .column-count {
@@ -425,8 +428,20 @@
       font-weight: 500;
       padding: 1px 7px;
       border-radius: 999px;
-      background: var(--accent-dim);
-      color: var(--accent);
+      background: hsl(var(--tag-hue, 214), 70%, 92%);
+      color: hsl(var(--tag-hue, 214), 60%, 32%);
+    }
+
+    [data-theme="dark"] .tag-chip {
+      background: hsl(var(--tag-hue, 214), 40%, 22%);
+      color: hsl(var(--tag-hue, 214), 70%, 72%);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) .tag-chip {
+        background: hsl(var(--tag-hue, 214), 40%, 22%);
+        color: hsl(var(--tag-hue, 214), 70%, 72%);
+      }
     }
 
     .column-empty {
@@ -465,12 +480,6 @@
       display: flex;
       flex-direction: column;
       gap: var(--s4);
-    }
-
-    .list-controls {
-      display: flex;
-      align-items: center;
-      gap: var(--s3);
     }
 
     .list-section { /* one per group */
@@ -528,21 +537,6 @@
       white-space: nowrap;
     }
 
-    .list-table th.sortable {
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .list-table th.sortable:hover { color: var(--text); }
-
-    .sort-icon {
-      display: inline-flex;
-      align-items: center;
-      margin-left: 3px;
-      color: var(--accent);
-      vertical-align: middle;
-    }
-
     .list-table td {
       padding: var(--s2) var(--s4);
       font-size: 0.8125rem;
@@ -585,22 +579,20 @@
     .modal-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.45);
+      background: rgba(0, 0, 0, 0.3);
       z-index: 100;
-      backdrop-filter: blur(2px);
     }
 
     .modal {
       position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
+      top: 0;
+      right: 0;
+      height: 100vh;
+      width: min(480px, 100vw);
       z-index: 101;
-      width: min(640px, calc(100vw - 2 * var(--s5)));
-      max-height: calc(100vh - 4 * var(--s5));
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--r3);
+      border-left: 1px solid var(--border);
+      border-radius: var(--r3) 0 0 var(--r3);
       box-shadow: var(--shadow-md);
       display: flex;
       flex-direction: column;
@@ -609,7 +601,7 @@
 
     .modal-header {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: var(--s3);
       padding: var(--s4) var(--s5);
       border-bottom: 1px solid var(--border);
@@ -657,6 +649,14 @@
       display: flex;
       flex-direction: column;
       gap: var(--s4);
+      min-height: 0;
+    }
+
+    .modal-body-section-grow {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 120px;
     }
 
     /* Tag editor */
@@ -692,8 +692,20 @@
       font-weight: 500;
       padding: 2px 4px 2px 8px;
       border-radius: 999px;
-      background: var(--accent-dim);
-      color: var(--accent);
+      background: hsl(var(--tag-hue, 214), 70%, 92%);
+      color: hsl(var(--tag-hue, 214), 60%, 32%);
+    }
+
+    [data-theme="dark"] .tag-chip-removable {
+      background: hsl(var(--tag-hue, 214), 40%, 22%);
+      color: hsl(var(--tag-hue, 214), 70%, 72%);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) .tag-chip-removable {
+        background: hsl(var(--tag-hue, 214), 40%, 22%);
+        color: hsl(var(--tag-hue, 214), 70%, 72%);
+      }
     }
 
     .tag-remove-btn {
@@ -712,7 +724,7 @@
       transition: background var(--ease);
     }
 
-    .tag-remove-btn:hover { background: var(--accent); color: #fff; }
+    .tag-remove-btn:hover { background: hsl(var(--tag-hue, 214), 55%, 40%); color: #fff; }
 
     .tag-add-input {
       flex: 1;
@@ -729,9 +741,9 @@
 
     /* Body textarea */
     .modal-body-textarea {
+      flex: 1;
       width: 100%;
-      min-height: 200px;
-      resize: vertical;
+      resize: none;
       padding: var(--s3);
       border: 1px solid var(--border);
       border-radius: var(--r2);
@@ -831,12 +843,6 @@
     .btn-secondary:hover { background: var(--surface-2); color: var(--text); }
     .btn-secondary:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 
-    .raw-hint {
-      font-size: 0.75rem;
-      color: var(--text-3);
-      margin-left: auto;
-    }
-
     .raw-editor {
       flex: 1;
       resize: none;
@@ -851,7 +857,114 @@
       tab-size: 2;
     }
 
-    .raw-editor:focus { background: var(--surface); }
+
+
+    /* ─────────────────────────────────────────────
+       COMBOBOX
+       ───────────────────────────────────────────── */
+    .combobox-wrap {
+      position: relative;
+    }
+
+    .combobox-btn {
+      display: flex;
+      align-items: center;
+      gap: var(--s2);
+      padding: var(--s1) var(--s3);
+      border: 1px solid var(--border);
+      border-radius: var(--r1);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      min-width: 130px;
+      justify-content: space-between;
+      transition: border-color var(--ease);
+    }
+
+    .combobox-btn:hover { border-color: var(--border-focus); }
+    .combobox-btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+
+    .combobox-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      z-index: 50;
+      min-width: 190px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r2);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      max-height: 300px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .combobox-search-row {
+      padding: var(--s2);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .combobox-search-input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--r1);
+      padding: var(--s1) var(--s2);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 0.8125rem;
+      outline: none;
+    }
+
+    .combobox-search-input:focus { border-color: var(--border-focus); }
+
+    .combobox-options {
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .combobox-option {
+      display: flex;
+      align-items: center;
+      gap: var(--s2);
+      padding: var(--s2) var(--s3);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      user-select: none;
+      transition: background var(--ease);
+    }
+
+    .combobox-option:hover { background: var(--surface-2); }
+
+    .combobox-check {
+      width: 14px;
+      flex-shrink: 0;
+      color: var(--accent);
+      font-size: 0.875rem;
+      visibility: hidden;
+    }
+
+    .combobox-check.shown { visibility: visible; }
+
+    .combobox-tag-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: hsl(var(--tag-hue, 214), 65%, 50%);
+      flex-shrink: 0;
+    }
+
+    .combobox-new-hint {
+      padding: var(--s2) var(--s3);
+      font-size: 0.75rem;
+      color: var(--text-2);
+      cursor: pointer;
+      border-top: 1px solid var(--border);
+    }
+
+    .combobox-new-hint:hover { background: var(--surface-2); }
 
     /* ─────────────────────────────────────────────
        TOAST NOTIFICATION
@@ -878,25 +991,20 @@
 </head>
 
 <body>
-<!-- ═══════════════════════════════════════════════
-     ROOT ALPINE COMPONENT
-     Manages: currentView, theme stub for Phase 1
-     Full state wired in subsequent phases.
-═══════════════════════════════════════════════ -->
 <div id="app" x-data="kanbanApp()" x-cloak>
 
   <!-- ── HEADER ── -->
   <header id="header" role="banner">
 
     <!-- Logo / title -->
-    <div class="header-logo" aria-label="Plain Kanban">
+    <div class="header-logo" aria-label="Flat Kanban">
       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
            fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
            stroke-linejoin="round" aria-hidden="true">
         <rect x="3" y="3" width="7" height="18" rx="1"/>
         <rect x="14" y="3" width="7" height="11" rx="1"/>
       </svg>
-      Plain Kanban
+      Flat Kanban
     </div>
 
     <!-- View tabs -->
@@ -919,31 +1027,6 @@
     </nav>
 
     <div class="header-spacer"></div>
-
-    <!-- Export / Import (wired in Phase 8) -->
-    <button class="icon-btn" aria-label="Export database" @click="exportFile()" title="Export">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-           fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-           stroke-linejoin="round" aria-hidden="true">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/>
-        <line x1="12" y1="15" x2="12" y2="3"/>
-      </svg>
-    </button>
-
-    <button class="icon-btn" aria-label="Import database" @click="$refs.importInput.click()" title="Import">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-           fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-           stroke-linejoin="round" aria-hidden="true">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="17 8 12 3 7 8"/>
-        <line x1="12" y1="3" x2="12" y2="15"/>
-      </svg>
-    </button>
-
-    <!-- Hidden file input for import -->
-    <input type="file" accept=".txt,text/plain" class="sr-only"
-           x-ref="importInput" @change="importFile($event)" aria-hidden="true" tabindex="-1" />
 
     <!-- Theme toggle -->
     <button class="icon-btn"
@@ -981,18 +1064,46 @@
 
   </header><!-- /header -->
 
-  <!-- ── SUB-HEADER (filters) — hidden in Raw view ── -->
-  <div id="subheader" x-show="currentView !== 'raw'">
+  <!-- Kanban subheader (columns filter + search) -->
+  <div id="subheader" x-show="currentView === 'kanban'">
     <span class="filter-label">Columns</span>
-    <select class="filter-select"
-            x-model="tagFilter"
-            aria-label="Tag filter">
-      <option value="none">None</option>
-      <option value="all">All tags</option>
-      <template x-for="tag in allTags" :key="tag">
-        <option :value="tag" x-text="tag"></option>
-      </template>
-    </select>
+    <div class="combobox-wrap" @click.outside="colCb.open = false">
+      <button class="combobox-btn" type="button"
+              @click="colCb.open = !colCb.open; $nextTick(() => colCb.open && $refs.colSearch && $refs.colSearch.focus())"
+              :aria-expanded="colCb.open"
+              aria-label="Columns filter">
+        <span x-text="colDisplayText()"></span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      <div class="combobox-dropdown" x-show="colCb.open">
+        <div class="combobox-search-row">
+          <input type="text" class="combobox-search-input" x-ref="colSearch"
+                 x-model="colCb.search" placeholder="Search tags…"
+                 @keydown.escape.stop="colCb.open = false; colCb.search = ''" />
+        </div>
+        <div class="combobox-options">
+          <div class="combobox-option" @click="colSetSpecial('none')">
+            <span class="combobox-check" :class="{ shown: colIsSpecial('none') }">&#10003;</span>
+            None
+          </div>
+          <div class="combobox-option" @click="colSetSpecial('all')">
+            <span class="combobox-check" :class="{ shown: colIsSpecial('all') }">&#10003;</span>
+            All tags
+          </div>
+          <template x-for="tag in colFilteredTags()" :key="tag">
+            <div class="combobox-option" @click.stop="colToggleTag(tag)">
+              <span class="combobox-check" :class="{ shown: colIsSelected(tag) }">&#10003;</span>
+              <span class="combobox-tag-dot" :style="`--tag-hue: ${tagHue(tag)}`"></span>
+              <span x-text="tag"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
 
     <input class="search-input"
            type="search"
@@ -1001,10 +1112,58 @@
            aria-label="Search tasks" />
   </div><!-- /subheader -->
 
+  <!-- List subheader (group by + search) -->
+  <div id="list-subheader" x-show="currentView === 'list'">
+    <span class="filter-label">Group by</span>
+    <div class="combobox-wrap" @click.outside="groupCb.open = false">
+      <button class="combobox-btn" type="button"
+              @click="groupCb.open = !groupCb.open; $nextTick(() => groupCb.open && $refs.groupSearch && $refs.groupSearch.focus())"
+              :aria-expanded="groupCb.open"
+              aria-label="Group by">
+        <span x-text="groupDisplayText()"></span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      <div class="combobox-dropdown" x-show="groupCb.open">
+        <div class="combobox-search-row">
+          <input type="text" class="combobox-search-input" x-ref="groupSearch"
+                 x-model="groupCb.search" placeholder="Search tags…"
+                 @keydown.escape.stop="groupCb.open = false; groupCb.search = ''" />
+        </div>
+        <div class="combobox-options">
+          <div class="combobox-option" @click="groupSetSpecial('none')">
+            <span class="combobox-check" :class="{ shown: groupIsSpecial('none') }">&#10003;</span>
+            None
+          </div>
+          <div class="combobox-option" @click="groupSetSpecial('all')">
+            <span class="combobox-check" :class="{ shown: groupIsSpecial('all') }">&#10003;</span>
+            All tags
+          </div>
+          <template x-for="tag in groupFilteredTags()" :key="tag">
+            <div class="combobox-option" @click.stop="groupToggleTag(tag)">
+              <span class="combobox-check" :class="{ shown: groupIsSelected(tag) }">&#10003;</span>
+              <span class="combobox-tag-dot" :style="`--tag-hue: ${tagHue(tag)}`"></span>
+              <span x-text="tag"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <input class="search-input"
+           type="search"
+           placeholder="Search tasks…"
+           x-model="searchQuery"
+           aria-label="Search tasks" />
+  </div><!-- /list-subheader -->
+
   <!-- ── MAIN CONTENT ── -->
   <main id="main" role="main">
 
-    <!-- Kanban view (Phase 4) -->
+    <!-- Kanban view -->
     <div class="view-panel" x-show="currentView === 'kanban'" role="tabpanel" aria-label="Kanban view">
       <p class="placeholder-panel" x-show="columns.length === 0"
          x-text="tasks.length === 0 ? 'No tasks yet.' : 'No tasks match the current filter.'"></p>
@@ -1016,7 +1175,9 @@
 
             <!-- Column header -->
             <div class="kanban-column-header">
-              <span class="column-tag-name" x-text="col.tag"></span>
+              <span class="column-tag-name"
+                    x-text="col.tag || 'All Tasks'"
+                    :style="col.tag ? `--tag-hue: ${tagHue(col.tag)}` : ''"></span>
               <span class="column-count" x-text="col.tasks.length" :aria-label="col.tasks.length + ' tasks'"></span>
             </div>
 
@@ -1048,7 +1209,8 @@
                   <p class="task-card-snippet" x-show="snippet(task)" x-text="snippet(task)"></p>
                   <div class="task-card-tags" aria-label="Tags">
                     <template x-for="tag in task.tags" :key="tag">
-                      <span class="tag-chip" x-text="'#' + tag"></span>
+                      <span class="tag-chip" x-text="'#' + tag"
+                            :style="`--tag-hue: ${tagHue(tag)}`"></span>
                     </template>
                   </div>
                 </div>
@@ -1072,20 +1234,9 @@
       </div><!-- /kanban-board -->
     </div>
 
-    <!-- List view (Phase 5) -->
+    <!-- List view -->
     <div class="view-panel" x-show="currentView === 'list'" role="tabpanel" aria-label="List view">
       <div class="list-view">
-
-        <!-- Controls bar -->
-        <div class="list-controls">
-          <span class="filter-label">Group by</span>
-          <select class="filter-select" x-model="listGroupBy" aria-label="Group tasks by">
-            <option value="none">None</option>
-            <template x-for="tag in allTags" :key="tag">
-              <option :value="tag" x-text="tag"></option>
-            </template>
-          </select>
-        </div>
 
         <p class="placeholder-panel" x-show="visibleTasks.length === 0" style="padding:var(--s6)">
           No tasks match the current filter.
@@ -1121,41 +1272,9 @@
               <table class="list-table" :aria-label="(group.group || 'All') + ' tasks'">
                 <thead>
                   <tr>
-                    <th class="sortable"
-                        @click="toggleSort('title')"
-                        :aria-sort="listSortBy === 'title' ? (listSortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
-                      Title
-                      <span x-show="listSortBy === 'title'" class="sort-icon" aria-hidden="true">
-                        <svg x-show="listSortDir === 'asc'" xmlns="http://www.w3.org/2000/svg" width="11" height="11"
-                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                             stroke-linecap="round" stroke-linejoin="round">
-                          <polyline points="18 15 12 9 6 15"/>
-                        </svg>
-                        <svg x-show="listSortDir === 'desc'" xmlns="http://www.w3.org/2000/svg" width="11" height="11"
-                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                             stroke-linecap="round" stroke-linejoin="round">
-                          <polyline points="6 9 12 15 18 9"/>
-                        </svg>
-                      </span>
-                    </th>
+                    <th>Title</th>
                     <th>Snippet</th>
-                    <th class="sortable"
-                        @click="toggleSort('tagCount')"
-                        :aria-sort="listSortBy === 'tagCount' ? (listSortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
-                      Tags
-                      <span x-show="listSortBy === 'tagCount'" class="sort-icon" aria-hidden="true">
-                        <svg x-show="listSortDir === 'asc'" xmlns="http://www.w3.org/2000/svg" width="11" height="11"
-                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                             stroke-linecap="round" stroke-linejoin="round">
-                          <polyline points="18 15 12 9 6 15"/>
-                        </svg>
-                        <svg x-show="listSortDir === 'desc'" xmlns="http://www.w3.org/2000/svg" width="11" height="11"
-                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                             stroke-linecap="round" stroke-linejoin="round">
-                          <polyline points="6 9 12 15 18 9"/>
-                        </svg>
-                      </span>
-                    </th>
+                    <th>Tags</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1168,7 +1287,8 @@
                       <td class="list-snippet-cell" x-text="snippet(task)"></td>
                       <td class="list-tags-cell">
                         <template x-for="tag in task.tags" :key="tag">
-                          <span class="tag-chip" x-text="'#' + tag"></span>
+                          <span class="tag-chip" x-text="'#' + tag"
+                                :style="`--tag-hue: ${tagHue(tag)}`"></span>
                         </template>
                       </td>
                     </tr>
@@ -1183,12 +1303,11 @@
       </div><!-- /list-view -->
     </div>
 
-    <!-- Raw view (Phase 7) -->
+    <!-- Raw view -->
     <div class="raw-view" x-show="currentView === 'raw'" role="tabpanel" aria-label="Raw view">
 
       <!-- Toolbar -->
       <div class="raw-toolbar">
-        <span x-show="rawEdited" class="unsaved-badge" role="status" aria-live="polite">Unsaved changes</span>
         <button class="btn-primary"
                 @click="saveRaw()"
                 :disabled="!rawEdited"
@@ -1197,7 +1316,16 @@
                 @click="discardRaw()"
                 :disabled="!rawEdited"
                 aria-label="Discard raw changes">Discard</button>
-        <span class="raw-hint">Edit the plain-text database directly. Click Save to apply.</span>
+        <div style="flex:1"></div>
+        <span x-show="rawEdited" class="unsaved-badge" role="status" aria-live="polite">Unsaved changes</span>
+        <button class="btn-secondary"
+                @click="exportFile()"
+                aria-label="Export database">Export</button>
+        <button class="btn-secondary"
+                @click="$refs.importInput.click()"
+                aria-label="Import database">Import</button>
+        <input type="file" accept=".txt,text/plain" class="sr-only"
+               x-ref="importInput" @change="importFile($event)" aria-hidden="true" tabindex="-1" />
       </div>
 
       <!-- Full-height text editor -->
@@ -1215,12 +1343,7 @@
 
   </main><!-- /main -->
 
-  <!-- Task detail modal injected in Phase 6 -->
-
-  <!-- ─────────────────────────────────────────────
-       TASK DETAILS MODAL (Phase 6)
-       role=dialog with keyboard trap; Escape closes.
-  ───────────────────────────────────────────────── -->
+  <!-- Task detail modal -->
 
   <!-- Backdrop — click to close -->
   <div class="modal-backdrop"
@@ -1258,31 +1381,50 @@
       <!-- Tag section -->
       <div>
         <p class="modal-section-label">Tags</p>
-        <div class="tag-editor" @click="$refs.tagInput.focus()">
-          <template x-if="selectedTask">
-            <template x-for="tag in selectedTask.tags" :key="tag">
-              <span class="tag-chip-removable">
-                #<span x-text="tag"></span>
-                <button class="tag-remove-btn"
-                        @click.stop="removeTag(selectedTask, tag)"
-                        :aria-label="'Remove tag ' + tag">✕</button>
-              </span>
+        <div class="combobox-wrap" @click.outside="tagCb.open = false">
+          <div class="tag-editor" @click="tagCb.open = true; $nextTick(() => $refs.tagCbInput && $refs.tagCbInput.focus())">
+            <template x-if="selectedTask">
+              <template x-for="tag in selectedTask.tags" :key="tag">
+                <span class="tag-chip-removable" :style="`--tag-hue: ${tagHue(tag)}`">
+                  #<span x-text="tag"></span>
+                  <button class="tag-remove-btn"
+                          @click.stop="removeTag(selectedTask, tag)"
+                          :aria-label="'Remove tag ' + tag">✕</button>
+                </span>
+              </template>
             </template>
-          </template>
-          <input class="tag-add-input"
-                 type="text"
-                 placeholder="Add tag…"
-                 x-ref="tagInput"
-                 x-model="newTagInput"
-                 @keydown.enter.prevent="commitNewTag()"
-                 @keydown.comma.prevent="commitNewTag()"
-                 @keydown.backspace="newTagInput === '' && selectedTask && selectedTask.tags.length && removeTag(selectedTask, selectedTask.tags[selectedTask.tags.length - 1])"
-                 aria-label="Add a new tag" />
+            <input class="tag-add-input"
+                   type="text"
+                   placeholder="Add tag…"
+                   x-ref="tagCbInput"
+                   x-model="tagCb.search"
+                   @focus="tagCb.open = true"
+                   @keydown.enter.prevent="tagCbCommit()"
+                   @keydown.comma.prevent="tagCbCommit()"
+                   @keydown.escape.stop="tagCb.open = false; tagCb.search = ''"
+                   @keydown.backspace="tagCb.search === '' && selectedTask && selectedTask.tags.length && removeTag(selectedTask, selectedTask.tags[selectedTask.tags.length - 1])"
+                   aria-label="Add a new tag" />
+          </div>
+          <div class="combobox-dropdown" x-show="tagCb.open && selectedTask">
+            <div class="combobox-options">
+              <template x-for="tag in tagCbFilteredTags()" :key="tag">
+                <div class="combobox-option" @click.stop="addTag(selectedTask, tag); tagCb.search = ''">
+                  <span class="combobox-tag-dot" :style="`--tag-hue: ${tagHue(tag)}`"></span>
+                  <span x-text="tag"></span>
+                </div>
+              </template>
+            </div>
+            <div class="combobox-new-hint"
+                 x-show="tagCb.search.trim() && !allTags.some(t => t === tagCb.search.trim().toLowerCase().replace(/[^a-z0-9_-]/g, ''))"
+                 @click.stop="tagCbCommit()">
+              Create "#<span x-text="tagCb.search.trim()"></span>"
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- Body text section -->
-      <div>
+      <div class="modal-body-section-grow">
         <p class="modal-section-label">Body</p>
         <textarea class="modal-body-textarea"
                   x-model="bodyText"
@@ -1313,10 +1455,7 @@
 
 </div><!-- /#app -->
 
-<!-- ═══════════════════════════════════════════════
-     APPLICATION SCRIPT
-     Sections: CONSTANTS | PARSER | SERIALIZER | STORAGE | APP
-═══════════════════════════════════════════════ -->
+<!-- Application script: CONSTANTS | PARSER | SERIALIZER | STORAGE | APP -->
 <script>
 /* ─────────────────────────────────────────────────
    CONSTANTS
@@ -1379,8 +1518,6 @@ function parsePreferences(text) {
     theme:        'auto',
     tagFilter:    'all',
     listGroupBy:  'none',
-    listSortBy:   'title',
-    listSortDir:  'asc',
   };
   if (!text) return defaults;
   for (const line of text.split('\n')) {
@@ -1388,7 +1525,13 @@ function parsePreferences(text) {
     if (eq === -1) continue;
     const k = line.slice(0, eq).trim();
     const v = line.slice(eq + 1).trim();
-    if (k in defaults) defaults[k] = v;
+    if (k in defaults) {
+      if ((k === 'tagFilter' || k === 'listGroupBy') && v.includes(',')) {
+        defaults[k] = v.split(',').filter(Boolean);
+      } else {
+        defaults[k] = v;
+      }
+    }
   }
   return defaults;
 }
@@ -1450,9 +1593,12 @@ function buildTaskRaw(title, tags, body) {
   return parts.join('\n');
 }
 
-/** Serialize preferences object to key=value lines. */
+/** Serialize preferences object to key=value lines. Arrays are comma-joined. */
 function serializePreferences(prefs) {
-  return Object.entries(prefs).map(([k, v]) => `${k}=${v}`).join('\n');
+  return Object.entries(prefs).map(([k, v]) => {
+    const val = Array.isArray(v) ? v.join(',') : v;
+    return `${k}=${val}`;
+  }).join('\n');
 }
 
 /**
@@ -1504,9 +1650,7 @@ Test thoroughly — last update broke the date picker.
 ---PREFERENCES---
 theme=auto
 tagFilter=all
-listGroupBy=none
-listSortBy=title
-listSortDir=asc`;
+listGroupBy=none`;
 
 /** Load raw text from localStorage, falling back to demo seed on first run. */
 function loadFromStorage() {
@@ -1536,26 +1680,23 @@ function kanbanApp() {
     rawText:        '',
     statusMsg:      '',
 
-    // Phase 4 drag state (stub — wired in Phase 4)
     draggedTask:       null,
     dragSourceColumn:  null,
     dropTarget:        null,
 
-    // Phase 5 list state (stub — wired in Phase 5)
     listGroupBy:    'none',
-    listSortBy:     'title',
-    listSortDir:    'asc',
     collapsedGroups: [],
 
-    // Phase 6 modal state (stub — wired in Phase 6)
     selectedTask:   null,
     modalOpen:      false,
-    newTagInput:    '',
     bodyText:       '',
 
-    // Phase 7 raw state (stub — wired in Phase 7)
     rawDraft:       '',
     rawEdited:      false,
+
+    colCb:   { open: false, search: '' },
+    groupCb: { open: false, search: '' },
+    tagCb:   { open: false, search: '' },
 
     /* ── Computed: all unique sorted tags across all tasks ── */
     get allTags() {
@@ -1567,11 +1708,13 @@ function kanbanApp() {
     /* ── Computed: tasks filtered by tagFilter + searchQuery ── */
     get visibleTasks() {
       let result = this.tasks;
+      const tf = this.tagFilter;
 
-      if (this.tagFilter === 'all') {
+      if (tf === 'all') {
         result = result.filter(t => t.tags.length > 0);
-      } else if (this.tagFilter !== 'none') {
-        result = result.filter(t => t.tags.includes(this.tagFilter));
+      } else if (tf !== 'none') {
+        const tags = Array.isArray(tf) ? tf : [tf];
+        result = result.filter(t => tags.some(tag => t.tags.includes(tag)));
       }
 
       if (this.searchQuery.trim()) {
@@ -1586,39 +1729,46 @@ function kanbanApp() {
 
     /* ── Computed: columns for Kanban view ── */
     get columns() {
-      if (this.tagFilter === 'none') {
-        // No tag grouping: single flat column showing all visible tasks
+      const tf = this.tagFilter;
+      if (tf === 'none') {
         return this.visibleTasks.length
-          ? [{ tag: 'All Tasks', tasks: this.visibleTasks }]
+          ? [{ tag: '', tasks: this.visibleTasks }]
           : [];
       }
-      const tags = this.tagFilter === 'all' ? this.allTags : [this.tagFilter];
+      const tags = tf === 'all' ? this.allTags
+                 : Array.isArray(tf) ? tf
+                 : [tf];
       return tags.map(tag => ({
         tag,
         tasks: this.visibleTasks.filter(t => t.tags.includes(tag)),
       }));
     },
 
-    /* ── Computed: sorted tasks for List view ── */
-    get sortedTasks() {
-      const compareFn = this.listSortBy === 'title'
-        ? (a, b) => this.displayTitle(a).localeCompare(this.displayTitle(b))
-        : (a, b) => a.tags.length - b.tags.length;
-      const dir = this.listSortDir === 'asc' ? 1 : -1;
-      return [...this.visibleTasks].sort((a, b) => compareFn(a, b) * dir);
-    },
-
     /* ── Computed: grouped task list ── */
     get groupedList() {
-      if (this.listGroupBy === 'none') {
-        return [{ group: '', tasks: this.sortedTasks }];
+      const lg = this.listGroupBy;
+      if (lg === 'none') {
+        return [{ group: '', tasks: this.visibleTasks }];
       }
-      const tag   = this.listGroupBy;
-      const inGroup   = this.sortedTasks.filter(t => t.tags.includes(tag));
-      const outGroup  = this.sortedTasks.filter(t => !t.tags.includes(tag));
+      if (lg === 'all') {
+        const result = [];
+        for (const tag of this.allTags) {
+          const tasks = this.visibleTasks.filter(t => t.tags.includes(tag));
+          if (tasks.length) result.push({ group: tag, tasks });
+        }
+        const untagged = this.visibleTasks.filter(t => t.tags.length === 0);
+        if (untagged.length) result.push({ group: 'untagged', tasks: untagged });
+        return result;
+      }
+      const tags = Array.isArray(lg) ? lg : [lg];
+      const tagSet = new Set(tags);
       const result = [];
-      if (inGroup.length)  result.push({ group: tag,       tasks: inGroup });
-      if (outGroup.length) result.push({ group: 'untagged', tasks: outGroup });
+      for (const tag of tags) {
+        const tasks = this.visibleTasks.filter(t => t.tags.includes(tag));
+        if (tasks.length) result.push({ group: tag, tasks });
+      }
+      const untagged = this.visibleTasks.filter(t => !t.tags.some(tag => tagSet.has(tag)));
+      if (untagged.length) result.push({ group: 'untagged', tasks: untagged });
       return result;
     },
 
@@ -1633,8 +1783,6 @@ function kanbanApp() {
       this.theme       = preferences.theme       ?? 'auto';
       this.tagFilter   = preferences.tagFilter   ?? 'all';
       this.listGroupBy = preferences.listGroupBy ?? 'none';
-      this.listSortBy  = preferences.listSortBy  ?? 'title';
-      this.listSortDir = preferences.listSortDir ?? 'asc';
 
       this._applyTheme(this.theme);
 
@@ -1686,6 +1834,100 @@ function kanbanApp() {
       return words.length > SNIPPET_WORDS ? text + '…' : text;
     },
 
+    /* ── Tag color palette ── */
+    tagHue(tag) {
+      let h = 0;
+      for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) % 360;
+      return Math.round(h / 30) * 30;
+    },
+
+    /* ── Combobox helpers: Columns filter ── */
+    colFilteredTags() {
+      const s = this.colCb.search.toLowerCase();
+      return s ? this.allTags.filter(t => t.includes(s)) : this.allTags;
+    },
+    colIsSelected(tag) {
+      const tf = this.tagFilter;
+      return Array.isArray(tf) ? tf.includes(tag) : tf === tag;
+    },
+    colIsSpecial(val) {
+      const tf = this.tagFilter;
+      return !Array.isArray(tf) && tf === val;
+    },
+    colToggleTag(tag) {
+      const tf = this.tagFilter;
+      if (Array.isArray(tf)) {
+        const next = tf.includes(tag) ? tf.filter(t => t !== tag) : [...tf, tag];
+        this.tagFilter = next.length === 0 ? 'none' : next;
+      } else if (tf === tag) {
+        this.tagFilter = 'none';
+      } else {
+        this.tagFilter = [tag];
+      }
+    },
+    colSetSpecial(val) {
+      this.tagFilter = val;
+      this.colCb.open = false;
+    },
+    colDisplayText() {
+      const tf = this.tagFilter;
+      if (tf === 'none') return 'None';
+      if (tf === 'all') return 'All tags';
+      if (Array.isArray(tf)) return tf.length === 1 ? tf[0] : `${tf.length} tags`;
+      return tf;
+    },
+
+    /* ── Combobox helpers: Group by ── */
+    groupFilteredTags() {
+      const s = this.groupCb.search.toLowerCase();
+      return s ? this.allTags.filter(t => t.includes(s)) : this.allTags;
+    },
+    groupIsSelected(tag) {
+      const lg = this.listGroupBy;
+      return Array.isArray(lg) ? lg.includes(tag) : lg === tag;
+    },
+    groupIsSpecial(val) {
+      const lg = this.listGroupBy;
+      return !Array.isArray(lg) && lg === val;
+    },
+    groupToggleTag(tag) {
+      const lg = this.listGroupBy;
+      if (Array.isArray(lg)) {
+        const next = lg.includes(tag) ? lg.filter(t => t !== tag) : [...lg, tag];
+        this.listGroupBy = next.length === 0 ? 'none' : next;
+      } else if (lg === tag) {
+        this.listGroupBy = 'none';
+      } else {
+        this.listGroupBy = [tag];
+      }
+    },
+    groupSetSpecial(val) {
+      this.listGroupBy = val;
+      this.groupCb.open = false;
+    },
+    groupDisplayText() {
+      const lg = this.listGroupBy;
+      if (lg === 'none') return 'None';
+      if (lg === 'all') return 'All tags';
+      if (Array.isArray(lg)) return lg.length === 1 ? lg[0] : `${lg.length} tags`;
+      return lg;
+    },
+
+    /* ── Combobox helpers: Task detail tags ── */
+    tagCbFilteredTags() {
+      const s = this.tagCb.search.toLowerCase();
+      const existing = this.selectedTask?.tags ?? [];
+      return s
+        ? this.allTags.filter(t => t.includes(s) && !existing.includes(t))
+        : this.allTags.filter(t => !existing.includes(t));
+    },
+    tagCbCommit() {
+      const raw = this.tagCb.search.trim();
+      if (!raw) return;
+      this.addTag(this.selectedTask, raw);
+      this.tagCb.search = '';
+    },
+
     /* ── Persistence ── */
     _saveDatabase() {
       this.rawText = serializeDatabase(this.tasks, this.preferences);
@@ -1705,10 +1947,8 @@ function kanbanApp() {
       setTimeout(() => { this.statusMsg = ''; }, 2000);
     },
 
-    /* ── Stubs: wired in later phases ── */
-
     /* ─────────────────────────────────────────────
-       PHASE 8: EXPORT / IMPORT
+       EXPORT / IMPORT
        ───────────────────────────────────────────── */
 
     exportFile() {
@@ -1716,7 +1956,7 @@ function kanbanApp() {
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
       a.href     = url;
-      a.download = 'plain-kanban.txt';
+      a.download = 'flat-kanban.txt';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1738,11 +1978,7 @@ function kanbanApp() {
         this.theme       = preferences.theme       ?? 'auto';
         this.tagFilter   = preferences.tagFilter   ?? 'all';
         this.listGroupBy = preferences.listGroupBy ?? 'none';
-        this.listSortBy  = preferences.listSortBy  ?? 'title';
-        this.listSortDir = preferences.listSortDir ?? 'asc';
-        this._applyTheme(this.theme);
-        saveToStorage(text);
-        this._toast(`Imported ${tasks.length} task${tasks.length === 1 ? '' : 's'}`);
+
       };
       reader.onerror = () => this._toast('Import failed — could not read file');
       reader.readAsText(file, 'utf-8');
@@ -1751,7 +1987,7 @@ function kanbanApp() {
     },
 
     /* ─────────────────────────────────────────────
-       PHASE 7: RAW VIEW
+       RAW VIEW
        ───────────────────────────────────────────── */
 
     saveRaw() {
@@ -1763,8 +1999,6 @@ function kanbanApp() {
       this.theme       = preferences.theme       ?? 'auto';
       this.tagFilter   = preferences.tagFilter   ?? 'all';
       this.listGroupBy = preferences.listGroupBy ?? 'none';
-      this.listSortBy  = preferences.listSortBy  ?? 'title';
-      this.listSortDir = preferences.listSortDir ?? 'asc';
       saveToStorage(this.rawText);
       this.rawEdited = false;
       this._toast('Saved');
@@ -1776,13 +2010,13 @@ function kanbanApp() {
     },
 
     /* ─────────────────────────────────────────────
-       PHASE 6: TASK DETAILS MODAL
+       TASK DETAILS MODAL
        ───────────────────────────────────────────── */
 
     openTask(task) {
       this.selectedTask = task;
       this.bodyText     = extractBody(task.raw);
-      this.newTagInput  = '';
+      this.tagCb.search = '';
       this.modalOpen    = true;
       this.$nextTick(() => {
         const modal = this.$refs.modal;
@@ -1796,7 +2030,8 @@ function kanbanApp() {
     closeTask() {
       this.modalOpen    = false;
       this.selectedTask = null;
-      this.newTagInput  = '';
+      this.tagCb.search = '';
+      this.tagCb.open   = false;
     },
 
     updateTitle(task, newTitle) {
@@ -1823,12 +2058,6 @@ function kanbanApp() {
     removeTag(task, tag) {
       if (!task) return;
       this._applyTagUpdate(task, task.tags.filter(t => t !== tag));
-    },
-
-    commitNewTag() {
-      if (!this.newTagInput.trim()) return;
-      this.addTag(this.selectedTask, this.newTagInput);
-      this.newTagInput = '';
     },
 
     deleteTask(task) {
@@ -1860,7 +2089,7 @@ function kanbanApp() {
     },
 
     /* ─────────────────────────────────────────────
-       PHASE 4: KANBAN DRAG-AND-DROP
+       KANBAN DRAG-AND-DROP
        ───────────────────────────────────────────── */
 
     dragStart(event, task, sourceTag) {
@@ -1911,30 +2140,19 @@ function kanbanApp() {
     },
 
     addTaskToColumn(tag) {
-      const newId  = this.tasks.length ? Math.max(...this.tasks.map(t => t.id)) + 1 : 1;
-      const raw    = buildTaskRaw(null, [tag], 'New task');
-      const task   = { id: newId, raw, title: null, tags: [tag] };
+      const newId = this.tasks.length ? Math.max(...this.tasks.map(t => t.id)) + 1 : 1;
+      // Empty tag means the "None" flat column — create task with no tags
+      const tags  = tag ? [tag] : [];
+      const raw   = buildTaskRaw(null, tags, 'New task');
+      const task  = { id: newId, raw, title: null, tags };
       this.tasks.push(task);
       this.autosave();
-      // Open modal immediately so user can edit (wired in Phase 6 — no-op until then)
       this.openTask(task);
     },
 
     /* ─────────────────────────────────────────────
-       PHASE 5: LIST VIEW HELPERS
+       LIST VIEW HELPERS
        ───────────────────────────────────────────── */
-
-    toggleSort(col) {
-      if (this.listSortBy === col) {
-        this.listSortDir = this.listSortDir === 'asc' ? 'desc' : 'asc';
-      } else {
-        this.listSortBy  = col;
-        this.listSortDir = 'asc';
-      }
-      this.preferences.listSortBy  = this.listSortBy;
-      this.preferences.listSortDir = this.listSortDir;
-      this._saveDatabase();
-    },
 
     toggleGroup(group) {
       if (this.collapsedGroups.includes(group)) {
