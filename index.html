@@ -457,6 +457,127 @@
 
     .add-task-btn:hover { background: var(--surface-2); color: var(--accent); }
     .add-task-btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+
+    /* ─────────────────────────────────────────────
+       LIST VIEW
+       ───────────────────────────────────────────── */
+    .list-view {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s4);
+    }
+
+    .list-controls {
+      display: flex;
+      align-items: center;
+      gap: var(--s3);
+    }
+
+    .list-section { /* one per group */
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r2);
+      overflow: hidden;
+    }
+
+    .list-group-header {
+      display: flex;
+      align-items: center;
+      gap: var(--s2);
+      padding: var(--s2) var(--s4);
+      background: var(--surface-2);
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+      font-weight: 600;
+      font-size: 0.8125rem;
+    }
+
+    .list-group-header:hover { background: var(--border); }
+
+    .group-chevron {
+      transition: transform var(--ease);
+      color: var(--text-3);
+      flex-shrink: 0;
+    }
+
+    .group-chevron.collapsed { transform: rotate(-90deg); }
+
+    .group-count {
+      font-weight: 400;
+      font-size: 0.75rem;
+      color: var(--text-3);
+      margin-left: auto;
+    }
+
+    .list-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .list-table th {
+      padding: var(--s2) var(--s4);
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-2);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+      white-space: nowrap;
+    }
+
+    .list-table th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .list-table th.sortable:hover { color: var(--text); }
+
+    .sort-icon {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 3px;
+      color: var(--accent);
+      vertical-align: middle;
+    }
+
+    .list-table td {
+      padding: var(--s2) var(--s4);
+      font-size: 0.8125rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    .list-table tr:last-child td { border-bottom: none; }
+
+    .list-table tr:hover td { background: var(--surface-2); cursor: pointer; }
+
+    .list-title-cell {
+      font-weight: 500;
+      color: var(--text);
+      min-width: 140px;
+      max-width: 240px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .list-snippet-cell {
+      color: var(--text-2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 340px;
+    }
+
+    .list-tags-cell {
+      white-space: nowrap;
+      min-width: 80px;
+    }
+
+    .list-tags-cell .tag-chip { margin-right: 3px; }
   </style>
 </head>
 
@@ -657,7 +778,113 @@
 
     <!-- List view (Phase 5) -->
     <div class="view-panel" x-show="currentView === 'list'" role="tabpanel" aria-label="List view">
-      <p class="placeholder-panel">List view — coming in Phase 5.</p>
+      <div class="list-view">
+
+        <!-- Controls bar -->
+        <div class="list-controls">
+          <span class="filter-label">Group by</span>
+          <select class="filter-select" x-model="listGroupBy" aria-label="Group tasks by">
+            <option value="none">None</option>
+            <template x-for="tag in allTags" :key="tag">
+              <option :value="tag" x-text="tag"></option>
+            </template>
+          </select>
+        </div>
+
+        <p class="placeholder-panel" x-show="visibleTasks.length === 0" style="padding:var(--s6)">
+          No tasks match the current filter.
+        </p>
+
+        <!-- Groups -->
+        <template x-for="group in groupedList" :key="group.group">
+          <section class="list-section">
+
+            <!-- Group header — only shown when actually grouping -->
+            <div x-show="listGroupBy !== 'none'"
+                 class="list-group-header"
+                 @click="toggleGroup(group.group)"
+                 :aria-expanded="!collapsedGroups.includes(group.group)"
+                 role="button"
+                 tabindex="0"
+                 @keydown.enter.prevent="toggleGroup(group.group)"
+                 @keydown.space.prevent="toggleGroup(group.group)">
+              <!-- chevron -->
+              <svg class="group-chevron"
+                   :class="{ collapsed: collapsedGroups.includes(group.group) }"
+                   xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                   stroke-linejoin="round" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+              <span x-text="group.group || 'Untagged'"></span>
+              <span class="group-count" x-text="group.tasks.length + ' task' + (group.tasks.length === 1 ? '' : 's')"></span>
+            </div>
+
+            <!-- Table -->
+            <div x-show="!collapsedGroups.includes(group.group)">
+              <table class="list-table" :aria-label="(group.group || 'All') + ' tasks'">
+                <thead>
+                  <tr>
+                    <th class="sortable"
+                        @click="toggleSort('title')"
+                        :aria-sort="listSortBy === 'title' ? (listSortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
+                      Title
+                      <span x-show="listSortBy === 'title'" class="sort-icon" aria-hidden="true">
+                        <svg x-show="listSortDir === 'asc'" xmlns="http://www.w3.org/2000/svg" width="11" height="11"
+                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                             stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="18 15 12 9 6 15"/>
+                        </svg>
+                        <svg x-show="listSortDir === 'desc'" xmlns="http://www.w3.org/2000/svg" width="11" height="11"
+                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                             stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </span>
+                    </th>
+                    <th>Snippet</th>
+                    <th class="sortable"
+                        @click="toggleSort('tagCount')"
+                        :aria-sort="listSortBy === 'tagCount' ? (listSortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
+                      Tags
+                      <span x-show="listSortBy === 'tagCount'" class="sort-icon" aria-hidden="true">
+                        <svg x-show="listSortDir === 'asc'" xmlns="http://www.w3.org/2000/svg" width="11" height="11"
+                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                             stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="18 15 12 9 6 15"/>
+                        </svg>
+                        <svg x-show="listSortDir === 'desc'" xmlns="http://www.w3.org/2000/svg" width="11" height="11"
+                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                             stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="task in group.tasks" :key="task.id">
+                    <tr @click="openTask(task)"
+                        tabindex="0"
+                        @keydown.enter.prevent="openTask(task)"
+                        :aria-label="'Open task: ' + displayTitle(task)">
+                      <td class="list-title-cell" x-text="displayTitle(task)"></td>
+                      <td class="list-snippet-cell" x-text="snippet(task)"></td>
+                      <td class="list-tags-cell">
+                        <template x-for="tag in task.tags" :key="tag">
+                          <span class="tag-chip" x-text="'#' + tag"></span>
+                        </template>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+
+          </section>
+        </template>
+
+      </div><!-- /list-view -->
     </div>
 
     <!-- Raw view (Phase 7) -->
@@ -958,6 +1185,29 @@ function kanbanApp() {
       }));
     },
 
+    /* ── Computed: sorted tasks for List view ── */
+    get sortedTasks() {
+      const compareFn = this.listSortBy === 'title'
+        ? (a, b) => this.displayTitle(a).localeCompare(this.displayTitle(b))
+        : (a, b) => a.tags.length - b.tags.length;
+      const dir = this.listSortDir === 'asc' ? 1 : -1;
+      return [...this.visibleTasks].sort((a, b) => compareFn(a, b) * dir);
+    },
+
+    /* ── Computed: grouped task list ── */
+    get groupedList() {
+      if (this.listGroupBy === 'none') {
+        return [{ group: '', tasks: this.sortedTasks }];
+      }
+      const tag   = this.listGroupBy;
+      const inGroup   = this.sortedTasks.filter(t => t.tags.includes(tag));
+      const outGroup  = this.sortedTasks.filter(t => !t.tags.includes(tag));
+      const result = [];
+      if (inGroup.length)  result.push({ group: tag,       tasks: inGroup });
+      if (outGroup.length) result.push({ group: 'untagged', tasks: outGroup });
+      return result;
+    },
+
     /* ── Lifecycle ── */
     init() {
       this.rawText = loadFromStorage();
@@ -1104,6 +1354,30 @@ function kanbanApp() {
       this.autosave();
       // Open modal immediately so user can edit (wired in Phase 6 — no-op until then)
       this.openTask(task);
+    },
+
+    /* ─────────────────────────────────────────────
+       PHASE 5: LIST VIEW HELPERS
+       ───────────────────────────────────────────── */
+
+    toggleSort(col) {
+      if (this.listSortBy === col) {
+        this.listSortDir = this.listSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        this.listSortBy  = col;
+        this.listSortDir = 'asc';
+      }
+      this.preferences.listSortBy  = this.listSortBy;
+      this.preferences.listSortDir = this.listSortDir;
+      this._saveDatabase();
+    },
+
+    toggleGroup(group) {
+      if (this.collapsedGroups.includes(group)) {
+        this.collapsedGroups = this.collapsedGroups.filter(g => g !== group);
+      } else {
+        this.collapsedGroups = [...this.collapsedGroups, group];
+      }
     },
   };
 }
