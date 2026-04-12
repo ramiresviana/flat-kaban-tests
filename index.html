@@ -302,6 +302,161 @@
       color: var(--text-3);
       font-size: 0.875rem;
     }
+
+    /* ─────────────────────────────────────────────
+       KANBAN BOARD
+       ───────────────────────────────────────────── */
+    .kanban-board {
+      display: flex;
+      gap: var(--s4);
+      height: 100%;
+      align-items: flex-start;
+      overflow-x: auto;
+      padding-bottom: var(--s4);
+    }
+
+    .kanban-column {
+      flex-shrink: 0;
+      width: 284px;
+      background: var(--surface);
+      border-radius: var(--r3);
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      max-height: 100%;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .kanban-column-header {
+      padding: var(--s2) var(--s4);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--s2);
+    }
+
+    .column-tag-name {
+      font-weight: 600;
+      font-size: 0.8125rem;
+      text-transform: capitalize;
+    }
+
+    .column-count {
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: var(--surface-2);
+      color: var(--text-2);
+      padding: 1px 7px;
+      border-radius: 999px;
+      min-width: 20px;
+      text-align: center;
+    }
+
+    .kanban-cards {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--s3);
+      display: flex;
+      flex-direction: column;
+      gap: var(--s2);
+      min-height: 80px;
+      border-radius: 0 0 var(--r3) var(--r3);
+      transition: background var(--ease);
+    }
+
+    .kanban-cards.dragover {
+      background: var(--accent-dim);
+      outline: 2px dashed var(--accent);
+      outline-offset: -4px;
+    }
+
+    /* Task card */
+    .task-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r2);
+      padding: var(--s3) var(--s4);
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow var(--ease), border-color var(--ease), opacity var(--ease);
+      user-select: none;
+    }
+
+    .task-card:hover {
+      border-color: var(--border-focus);
+      box-shadow: var(--shadow-md);
+    }
+
+    .task-card:focus-visible {
+      outline: 2px solid var(--border-focus);
+      outline-offset: 2px;
+    }
+
+    .task-card.dragging { opacity: 0.35; }
+
+    .task-card-title {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: var(--s1);
+      line-height: 1.4;
+    }
+
+    .task-card-snippet {
+      font-size: 0.8125rem;
+      color: var(--text-2);
+      line-height: 1.4;
+      margin-bottom: var(--s2);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .task-card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--s1);
+    }
+
+    .tag-chip {
+      font-size: 0.6875rem;
+      font-weight: 500;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .column-empty {
+      text-align: center;
+      color: var(--text-3);
+      font-size: 0.8125rem;
+      padding: var(--s5) var(--s4);
+      border: 1px dashed var(--border);
+      border-radius: var(--r2);
+    }
+
+    /* Add-task button inside column */
+    .add-task-btn {
+      display: flex;
+      align-items: center;
+      gap: var(--s2);
+      width: 100%;
+      padding: var(--s2) var(--s4);
+      border: none;
+      border-top: 1px solid var(--border);
+      background: transparent;
+      cursor: pointer;
+      font-size: 0.8125rem;
+      color: var(--text-3);
+      border-radius: 0 0 var(--r3) var(--r3);
+      transition: background var(--ease), color var(--ease);
+    }
+
+    .add-task-btn:hover { background: var(--surface-2); color: var(--accent); }
+    .add-task-btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
   </style>
 </head>
 
@@ -434,11 +589,70 @@
 
     <!-- Kanban view (Phase 4) -->
     <div class="view-panel" x-show="currentView === 'kanban'" role="tabpanel" aria-label="Kanban view">
-      <p class="placeholder-panel" x-show="columns.length === 0">No columns to display. Add tags to tasks.</p>
-      <!-- Board rendered in Phase 4 -->
-      <div id="kanban-board" x-show="columns.length > 0">
-        <!-- Columns injected in Phase 4 -->
-      </div>
+      <p class="placeholder-panel" x-show="columns.length === 0"
+         x-text="tasks.length === 0 ? 'No tasks yet.' : 'No columns to display. Change the Column filter.'"></p>
+
+      <!-- Board: one column per tag -->
+      <div class="kanban-board" x-show="columns.length > 0" role="list">
+        <template x-for="col in columns" :key="col.tag">
+          <div class="kanban-column" role="listitem">
+
+            <!-- Column header -->
+            <div class="kanban-column-header">
+              <span class="column-tag-name" x-text="col.tag"></span>
+              <span class="column-count" x-text="col.tasks.length" :aria-label="col.tasks.length + ' tasks'"></span>
+            </div>
+
+            <!-- Drop zone + cards -->
+            <div class="kanban-cards"
+                 @dragover.prevent="dragOver($event, col.tag)"
+                 @dragleave.self="dragLeave($event)"
+                 @drop.prevent="dropOnColumn($event, col.tag)"
+                 :class="{ dragover: dropTarget === col.tag }"
+                 :aria-label="col.tag + ' column drop zone'">
+
+              <div class="column-empty" x-show="col.tasks.length === 0">
+                Drop tasks here
+              </div>
+
+              <template x-for="task in col.tasks" :key="task.id + '-' + col.tag">
+                <div class="task-card"
+                     draggable="true"
+                     @dragstart="dragStart($event, task, col.tag)"
+                     @dragend="dragEnd()"
+                     @click.stop="openTask(task)"
+                     :class="{ dragging: draggedTask && draggedTask.id === task.id }"
+                     role="button"
+                     tabindex="0"
+                     @keydown.enter.prevent="openTask(task)"
+                     @keydown.space.prevent="openTask(task)"
+                     :aria-label="'Open task: ' + displayTitle(task)">
+                  <p class="task-card-title" x-text="displayTitle(task)"></p>
+                  <p class="task-card-snippet" x-show="snippet(task)" x-text="snippet(task)"></p>
+                  <div class="task-card-tags" aria-label="Tags">
+                    <template x-for="tag in task.tags" :key="tag">
+                      <span class="tag-chip" x-text="'#' + tag"></span>
+                    </template>
+                  </div>
+                </div>
+              </template>
+            </div><!-- /kanban-cards -->
+
+            <!-- Add task to this column -->
+            <button class="add-task-btn"
+                    @click="addTaskToColumn(col.tag)"
+                    :aria-label="'Add task to ' + col.tag">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                   stroke-linejoin="round" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Add task
+            </button>
+
+          </div><!-- /kanban-column -->
+        </template>
+      </div><!-- /kanban-board -->
     </div>
 
     <!-- List view (Phase 5) -->
@@ -686,6 +900,7 @@ function kanbanApp() {
     // Phase 4 drag state (stub — wired in Phase 4)
     draggedTask:       null,
     dragSourceColumn:  null,
+    dropTarget:        null,
 
     // Phase 5 list state (stub — wired in Phase 5)
     listGroupBy:    'none',
@@ -829,6 +1044,67 @@ function kanbanApp() {
     closeTask()       { /* Phase 6 */ },
     saveRaw()         { /* Phase 7 */ },
     discardRaw()      { /* Phase 7 */ },
+
+    /* ─────────────────────────────────────────────
+       PHASE 4: KANBAN DRAG-AND-DROP
+       ───────────────────────────────────────────── */
+
+    dragStart(event, task, sourceTag) {
+      this.draggedTask      = task;
+      this.dragSourceColumn = sourceTag;
+      event.dataTransfer.effectAllowed = 'move';
+      // Store task id so drop works even if state updates during drag
+      event.dataTransfer.setData('text/plain', String(task.id));
+    },
+
+    dragOver(event, targetTag) {
+      this.dropTarget = targetTag;
+    },
+
+    dragLeave(event) {
+      this.dropTarget = null;
+    },
+
+    dragEnd() {
+      this.draggedTask      = null;
+      this.dragSourceColumn = null;
+      this.dropTarget       = null;
+    },
+
+    dropOnColumn(event, targetTag) {
+      const taskId = parseInt(event.dataTransfer.getData('text/plain'), 10);
+      const task   = this.tasks.find(t => t.id === taskId);
+      this.dropTarget = null;
+
+      if (!task) return;
+      const sourceTag = this.dragSourceColumn;
+      if (targetTag === sourceTag) return;
+
+      // Build new tag list: remove source column tag, add target column tag
+      let newTags = task.tags.filter(t => t !== sourceTag);
+      if (!newTags.includes(targetTag)) newTags = [...newTags, targetTag];
+
+      this._applyTagUpdate(task, newTags);
+      this.dragEnd();
+    },
+
+    /** Central helper that rebuilds a task's raw block after a tag/title change. */
+    _applyTagUpdate(task, newTags) {
+      const body    = extractBody(task.raw);
+      task.raw      = buildTaskRaw(task.title, newTags, body);
+      task.tags     = newTags;
+      this.autosave();
+    },
+
+    addTaskToColumn(tag) {
+      const newId  = this.tasks.length ? Math.max(...this.tasks.map(t => t.id)) + 1 : 1;
+      const raw    = buildTaskRaw(null, [tag], 'New task');
+      const task   = { id: newId, raw, title: null, tags: [tag] };
+      this.tasks.push(task);
+      this.autosave();
+      // Open modal immediately so user can edit (wired in Phase 6 — no-op until then)
+      this.openTask(task);
+    },
   };
 }
 </script>
