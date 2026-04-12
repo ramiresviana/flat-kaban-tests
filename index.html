@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<!--
+  Plain Kanban — single-file offline-capable Kanban app
+  Data: plain text "database" in localStorage + export/import
+  Reactivity: Alpine.js v3 (CDN, ~15 KB gzip) — chosen for zero-build, minimal API
+  Icons: Feather Icons (CDN, SVG sprite)
+  Font: Inter via Google Fonts
+  No build step. Open index.html directly in any modern browser.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plain Kanban</title>
+
+  <!-- Inter typeface ─ display=swap avoids FOIT -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Feather Icons — lightweight SVG icon set -->
+  <script src="https://cdn.jsdelivr.net/npm/feather-icons@4.29.2/dist/feather.min.js"></script>
+
+  <!-- Alpine.js v3 — deferred so x-data is ready before DOMContentLoaded -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
+
+  <style>
+    /* ─────────────────────────────────────────────
+       DESIGN TOKENS  (light scheme defaults)
+       ───────────────────────────────────────────── */
+    :root {
+      /* Surface palette */
+      --bg:           #f4f5f7;
+      --surface:      #ffffff;
+      --surface-2:    #eef0f3;
+      --border:       #d8dce3;
+      --border-focus: #5a8dee;
+
+      /* Text */
+      --text:         #1a1d23;
+      --text-2:       #5a6070;
+      --text-3:       #8f96a3;
+
+      /* Accent */
+      --accent:       #4a7cf7;
+      --accent-hi:    #3567e8;
+      --accent-dim:   #dce9ff;
+
+      /* Semantic */
+      --danger:       #e05252;
+      --success:      #3cb87a;
+
+      /* Spacing scale (0.25 rem steps) */
+      --s1: 0.25rem;
+      --s2: 0.5rem;
+      --s3: 0.75rem;
+      --s4: 1rem;
+      --s5: 1.5rem;
+      --s6: 2rem;
+
+      /* Radii */
+      --r1: 4px;
+      --r2: 8px;
+      --r3: 12px;
+
+      /* Shadows */
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.08);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.12);
+
+      /* Transitions */
+      --ease: 140ms ease;
+
+      /* Typography */
+      --font: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    /* ─────────────────────────────────────────────
+       DARK SCHEME  (set via data-theme="dark" on <html>)
+       ───────────────────────────────────────────── */
+    [data-theme="dark"] {
+      --bg:           #13151a;
+      --surface:      #1e2029;
+      --surface-2:    #272a35;
+      --border:       #343847;
+      --border-focus: #5a8dee;
+
+      --text:         #e8eaf0;
+      --text-2:       #9aa0b4;
+      --text-3:       #5c6278;
+
+      --accent:       #5a8dee;
+      --accent-hi:    #6f9ef4;
+      --accent-dim:   #1a2540;
+
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.3);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.4);
+    }
+
+    /* Auto dark — defers to OS when no manual override is set */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) {
+        --bg:           #13151a;
+        --surface:      #1e2029;
+        --surface-2:    #272a35;
+        --border:       #343847;
+        --border-focus: #5a8dee;
+
+        --text:         #e8eaf0;
+        --text-2:       #9aa0b4;
+        --text-3:       #5c6278;
+
+        --accent:       #5a8dee;
+        --accent-hi:    #6f9ef4;
+        --accent-dim:   #1a2540;
+
+        --shadow-sm: 0 1px 3px rgba(0,0,0,.3);
+        --shadow-md: 0 4px 12px rgba(0,0,0,.4);
+      }
+    }
+
+    /* ─────────────────────────────────────────────
+       RESET & BASE
+       ───────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--text);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select, textarea {
+      font: inherit;
+      color: inherit;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+
+    /* ─────────────────────────────────────────────
+       APP LAYOUT  (flex column, full viewport)
+       ───────────────────────────────────────────── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ─── HEADER ─── */
+    #header {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: var(--s3);
+      padding: 0 var(--s5);
+      height: 52px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      z-index: 10;
+    }
+
+    .header-logo {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      margin-right: var(--s3);
+      display: flex;
+      align-items: center;
+      gap: var(--s2);
+    }
+
+    .header-logo svg { color: var(--accent); }
+
+    /* View tabs */
+    .view-tabs {
+      display: flex;
+      gap: var(--s1);
+      background: var(--surface-2);
+      border-radius: var(--r2);
+      padding: var(--s1);
+    }
+
+    .view-tab {
+      padding: var(--s1) var(--s3);
+      border: none;
+      background: transparent;
+      border-radius: var(--r1);
+      cursor: pointer;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--text-2);
+      transition: background var(--ease), color var(--ease);
+    }
+
+    .view-tab:hover { background: var(--border); color: var(--text); }
+    .view-tab.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
+
+    /* Header spacer */
+    .header-spacer { flex: 1; }
+
+    /* Icon button (theme toggle, export, import) */
+    .icon-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: var(--r1);
+      background: transparent;
+      cursor: pointer;
+      color: var(--text-2);
+      transition: background var(--ease), color var(--ease);
+    }
+
+    .icon-btn:hover { background: var(--surface-2); color: var(--text); }
+    .icon-btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+
+    /* ─── MAIN CONTENT ─── */
+    #main {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── SUB-HEADER (filters) ─── */
+    #subheader {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: var(--s3);
+      padding: var(--s2) var(--s5);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .filter-label {
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--text-2);
+      white-space: nowrap;
+    }
+
+    .filter-select {
+      padding: var(--s1) var(--s3);
+      border: 1px solid var(--border);
+      border-radius: var(--r1);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      min-width: 120px;
+    }
+
+    .filter-select:focus { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+
+    .search-input {
+      flex: 1;
+      max-width: 280px;
+      padding: var(--s1) var(--s3);
+      border: 1px solid var(--border);
+      border-radius: var(--r1);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 0.8125rem;
+    }
+
+    .search-input::placeholder { color: var(--text-3); }
+    .search-input:focus { outline: 2px solid var(--border-focus); outline-offset: 2px; border-color: transparent; }
+
+    /* ─── VIEW PANELS ─── */
+    .view-panel {
+      flex: 1;
+      overflow: auto;
+      padding: var(--s5);
+    }
+
+    /* ─────────────────────────────────────────────
+       UTILITY CLASSES
+       ───────────────────────────────────────────── */
+    [x-cloak] { display: none !important; }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+
+    /* Placeholder panel while views load */
+    .placeholder-panel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-3);
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+
+<body>
+<!-- ═══════════════════════════════════════════════
+     ROOT ALPINE COMPONENT
+     Manages: currentView, theme stub for Phase 1
+     Full state wired in subsequent phases.
+═══════════════════════════════════════════════ -->
+<div id="app" x-data="kanbanApp()" x-cloak>
+
+  <!-- ── HEADER ── -->
+  <header id="header" role="banner">
+
+    <!-- Logo / title -->
+    <div class="header-logo" aria-label="Plain Kanban">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+           stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="3" width="7" height="18" rx="1"/>
+        <rect x="14" y="3" width="7" height="11" rx="1"/>
+      </svg>
+      Plain Kanban
+    </div>
+
+    <!-- View tabs -->
+    <nav class="view-tabs" role="tablist" aria-label="Views">
+      <button role="tab"
+              class="view-tab"
+              :class="{ active: currentView === 'kanban' }"
+              :aria-selected="currentView === 'kanban'"
+              @click="currentView = 'kanban'">Kanban</button>
+      <button role="tab"
+              class="view-tab"
+              :class="{ active: currentView === 'list' }"
+              :aria-selected="currentView === 'list'"
+              @click="currentView = 'list'">List</button>
+      <button role="tab"
+              class="view-tab"
+              :class="{ active: currentView === 'raw' }"
+              :aria-selected="currentView === 'raw'"
+              @click="switchToRaw()">Raw</button>
+    </nav>
+
+    <div class="header-spacer"></div>
+
+    <!-- Export / Import (wired in Phase 8) -->
+    <button class="icon-btn" aria-label="Export database" @click="exportFile()" title="Export">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+           stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </button>
+
+    <button class="icon-btn" aria-label="Import database" @click="$refs.importInput.click()" title="Import">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+           stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+    </button>
+
+    <!-- Hidden file input for import -->
+    <input type="file" accept=".txt,text/plain" class="sr-only"
+           x-ref="importInput" @change="importFile($event)" aria-hidden="true" tabindex="-1" />
+
+    <!-- Theme toggle -->
+    <button class="icon-btn"
+            aria-label="Toggle theme"
+            @click="toggleTheme()"
+            :title="'Theme: ' + theme">
+      <!-- sun (light) -->
+      <svg x-show="theme === 'light'" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+           viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/>
+        <line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/>
+        <line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+      <!-- moon (dark) -->
+      <svg x-show="theme === 'dark'" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+           viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+      <!-- circle (auto) -->
+      <svg x-show="theme === 'auto'" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+           viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"/>
+        <path d="M12 3v18M3 12h18" stroke-dasharray="2 3"/>
+      </svg>
+    </button>
+
+  </header><!-- /header -->
+
+  <!-- ── SUB-HEADER (filters) — hidden in Raw view ── -->
+  <div id="subheader" x-show="currentView !== 'raw'">
+    <span class="filter-label">Column</span>
+    <select class="filter-select"
+            x-model="tagFilter"
+            aria-label="Tag filter">
+      <option value="none">None</option>
+      <option value="all">All tags</option>
+      <template x-for="tag in allTags" :key="tag">
+        <option :value="tag" x-text="tag"></option>
+      </template>
+    </select>
+
+    <input class="search-input"
+           type="search"
+           placeholder="Search tasks…"
+           x-model="searchQuery"
+           aria-label="Search tasks" />
+  </div><!-- /subheader -->
+
+  <!-- ── MAIN CONTENT ── -->
+  <main id="main" role="main">
+
+    <!-- Kanban view (Phase 4) -->
+    <div class="view-panel" x-show="currentView === 'kanban'" role="tabpanel" aria-label="Kanban view">
+      <p class="placeholder-panel" x-show="columns.length === 0">No columns to display. Add tags to tasks.</p>
+      <!-- Board rendered in Phase 4 -->
+      <div id="kanban-board" x-show="columns.length > 0">
+        <!-- Columns injected in Phase 4 -->
+      </div>
+    </div>
+
+    <!-- List view (Phase 5) -->
+    <div class="view-panel" x-show="currentView === 'list'" role="tabpanel" aria-label="List view">
+      <p class="placeholder-panel">List view — coming in Phase 5.</p>
+    </div>
+
+    <!-- Raw view (Phase 7) -->
+    <div class="view-panel" style="padding:0" x-show="currentView === 'raw'" role="tabpanel" aria-label="Raw view">
+      <p class="placeholder-panel">Raw view — coming in Phase 7.</p>
+    </div>
+
+  </main><!-- /main -->
+
+  <!-- Task detail modal injected in Phase 6 -->
+
+  <!-- Toast / status live region -->
+  <div role="status" aria-live="polite" aria-atomic="true" class="sr-only" x-text="statusMsg"></div>
+
+</div><!-- /#app -->
+
+<!-- ═══════════════════════════════════════════════
+     APPLICATION SCRIPT
+     Sections: CONSTANTS | PARSER | SERIALIZER | STORAGE | APP
+═══════════════════════════════════════════════ -->
+<script>
+/* ─────────────────────────────────────────────────
+   CONSTANTS
+   ───────────────────────────────────────────────── */
+const STORAGE_KEY   = 'pk_db';
+const PREF_MARKER   = '---PREFERENCES---';
+const TASK_SEP      = '\n---\n';
+const TITLE_RE      = /#title\(([^)]*)\)/;
+const TAG_RE        = /#([a-zA-Z][a-zA-Z0-9_-]*)/g;
+// A line is a "managed metadata line" if every non-empty token starts with #
+const MANAGED_LINE_RE = /^(\s*#[a-zA-Z][a-zA-Z0-9_-]*\s*)+$/;
+const TITLE_LINE_RE   = /^#title\([^)]*\)$/;
+const AUTOSAVE_DELAY  = 400;   // ms debounce for UI edits
+const SNIPPET_WORDS   = 20;
+const TITLE_FALLBACK_WORDS = 8;
+
+/* ─────────────────────────────────────────────────
+   PARSER  (text → model)
+   Rules:
+   - Split on TASK_SEP to get blocks
+   - Preferences section follows PREF_MARKER line
+   - #title(...) anywhere in block → explicit title
+   - #word tokens (not inside #title) → tags (normalized)
+   ───────────────────────────────────────────────── */
+
+/** Parse a raw #title(...) out of a block string. Returns title string or null. */
+function parseTitle(block) {
+  const m = block.match(TITLE_RE);
+  return m ? m[1].trim() : null;
+}
+
+/** Collect all #tag tokens, excluding the literal word "title" used in #title(). */
+function parseTags(block) {
+  // Strip #title(...) occurrences first so "title" token is not captured
+  const stripped = block.replace(/#title\([^)]*\)/g, '');
+  const tags = new Set();
+  let m;
+  TAG_RE.lastIndex = 0;
+  while ((m = TAG_RE.exec(stripped)) !== null) {
+    tags.add(m[1].toLowerCase());
+  }
+  return [...tags];
+}
+
+/** Parse a single block of raw text into a Task object. */
+function parseTask(raw, id) {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return {
+    id,
+    raw: trimmed,
+    title: parseTitle(trimmed),
+    tags:  parseTags(trimmed),
+  };
+}
+
+/** Parse preferences key=value text into a Preferences object. */
+function parsePreferences(text) {
+  const defaults = {
+    theme:        'auto',
+    tagFilter:    'all',
+    listGroupBy:  'none',
+    listSortBy:   'title',
+    listSortDir:  'asc',
+  };
+  if (!text) return defaults;
+  for (const line of text.split('\n')) {
+    const eq = line.indexOf('=');
+    if (eq === -1) continue;
+    const k = line.slice(0, eq).trim();
+    const v = line.slice(eq + 1).trim();
+    if (k in defaults) defaults[k] = v;
+  }
+  return defaults;
+}
+
+/**
+ * parseDatabase(text) → { tasks: Task[], preferences: Preferences }
+ * Round-trip safe: tasks preserve their original `raw` strings.
+ */
+function parseDatabase(text) {
+  let mainText = text;
+  let prefText = '';
+
+  const prefIdx = text.indexOf(PREF_MARKER);
+  if (prefIdx !== -1) {
+    mainText = text.slice(0, prefIdx);
+    prefText = text.slice(prefIdx + PREF_MARKER.length);
+  }
+
+  const tasks = mainText
+    .split(TASK_SEP)
+    .map((block, i) => parseTask(block, i + 1))
+    .filter(Boolean);
+
+  return { tasks, preferences: parsePreferences(prefText) };
+}
+
+/* ─────────────────────────────────────────────────
+   SERIALIZER  (model → text)
+   Round-trip rule: tasks are stored by their .raw — never reprocessed unless
+   the user edits them via UI, in which case buildTaskRaw() rebuilds the block.
+   ───────────────────────────────────────────────── */
+
+/**
+ * Extract the "body" of a task block — everything that is NOT a managed
+ * metadata line (#title(...) or a line consisting solely of #tag tokens).
+ * Preserves user prose verbatim.
+ */
+function extractBody(raw) {
+  const lines = raw.split('\n');
+  const bodyLines = lines.filter(line => {
+    const t = line.trim();
+    if (!t) return true;                      // keep blank lines
+    if (TITLE_LINE_RE.test(t)) return false;  // managed title line
+    if (MANAGED_LINE_RE.test(t)) return false; // managed tag line
+    return true;
+  });
+  return bodyLines.join('\n').trimEnd();
+}
+
+/**
+ * Rebuild a task block from its constituent parts.
+ * Managed metadata is placed at the top; user body follows.
+ */
+function buildTaskRaw(title, tags, body) {
+  const parts = [];
+  if (title && title.trim()) parts.push(`#title(${title.trim()})`);
+  if (tags && tags.length)   parts.push(tags.map(t => `#${t}`).join(' '));
+  if (body && body.trim())   parts.push(body.trim());
+  return parts.join('\n');
+}
+
+/** Serialize preferences object to key=value lines. */
+function serializePreferences(prefs) {
+  return Object.entries(prefs).map(([k, v]) => `${k}=${v}`).join('\n');
+}
+
+/**
+ * serializeDatabase(tasks, preferences) → string
+ * Joins task.raw values with TASK_SEP; appends preferences section.
+ */
+function serializeDatabase(tasks, preferences) {
+  const body = tasks.map(t => t.raw).join(TASK_SEP);
+  const prefSection = `\n${PREF_MARKER}\n${serializePreferences(preferences)}`;
+  return body + prefSection;
+}
+
+/* ─────────────────────────────────────────────────
+   STORAGE  (localStorage + demo seed)
+   ───────────────────────────────────────────────── */
+
+const DEMO_DATA = `#title(Design new landing page)
+#design #ux
+Redesign the homepage with the updated brand guidelines.
+Include hero section, feature highlights, and CTA.
+Review with marketing team before handoff.
+---
+#title(Fix login bug on Safari)
+#bug #frontend
+Users on Safari 17 cannot log in — the OAuth redirect fails silently.
+Reproduce with Safari on macOS 14.
+Steps: go to /login, click "Sign in with Google", observe blank redirect.
+---
+#title(Write API documentation)
+#docs #backend
+Document all REST endpoints added in the v2 release.
+Use OpenAPI 3.1 schema. Publish on the developer portal.
+Assign to: backend team.
+---
+#title(Setup CI pipeline)
+#devops #backend
+Configure GitHub Actions for lint, test, and build on every PR.
+Cache node_modules. Add badge to README.
+---
+#title(Accessibility audit)
+#ux #frontend
+Run axe-core on all pages. Fix WCAG 2.1 AA violations.
+Priority: focus management, colour contrast, ARIA labels.
+---
+#title(Update dependencies)
+#devops
+Run npm audit. Update packages with known vulnerabilities.
+Test thoroughly — last update broke the date picker.
+---PREFERENCES---
+theme=auto
+tagFilter=all
+listGroupBy=none
+listSortBy=title
+listSortDir=asc`;
+
+/** Load raw text from localStorage, falling back to demo seed on first run. */
+function loadFromStorage() {
+  return localStorage.getItem(STORAGE_KEY) ?? DEMO_DATA;
+}
+
+/** Persist raw text to localStorage. */
+function saveToStorage(text) {
+  localStorage.setItem(STORAGE_KEY, text);
+}
+
+/* ─────────────────────────────────────────────────
+   APP  (Alpine.js component)
+   Provides all reactive state and logic consumed by the template.
+   ───────────────────────────────────────────────── */
+function kanbanApp() {
+  let _autosaveTimer = null;
+
+  return {
+    /* ── State ── */
+    currentView:    'kanban',
+    theme:          'auto',
+    tagFilter:      'all',
+    searchQuery:    '',
+    tasks:          [],
+    preferences:    {},
+    rawText:        '',
+    statusMsg:      '',
+
+    // Phase 4 drag state (stub — wired in Phase 4)
+    draggedTask:       null,
+    dragSourceColumn:  null,
+
+    // Phase 5 list state (stub — wired in Phase 5)
+    listGroupBy:    'none',
+    listSortBy:     'title',
+    listSortDir:    'asc',
+    collapsedGroups: [],
+
+    // Phase 6 modal state (stub — wired in Phase 6)
+    selectedTask:   null,
+    modalOpen:      false,
+    newTagInput:    '',
+    bodyText:       '',
+
+    // Phase 7 raw state (stub — wired in Phase 7)
+    rawDraft:       '',
+    rawEdited:      false,
+
+    /* ── Computed: all unique sorted tags across all tasks ── */
+    get allTags() {
+      const set = new Set();
+      this.tasks.forEach(t => t.tags.forEach(tag => set.add(tag)));
+      return [...set].sort();
+    },
+
+    /* ── Computed: tasks filtered by tagFilter + searchQuery ── */
+    get visibleTasks() {
+      let result = this.tasks;
+
+      if (this.tagFilter === 'all') {
+        result = result.filter(t => t.tags.length > 0);
+      } else if (this.tagFilter !== 'none') {
+        result = result.filter(t => t.tags.includes(this.tagFilter));
+      }
+
+      if (this.searchQuery.trim()) {
+        const q = this.searchQuery.toLowerCase();
+        result = result.filter(t =>
+          t.raw.toLowerCase().includes(q) ||
+          (t.title && t.title.toLowerCase().includes(q))
+        );
+      }
+      return result;
+    },
+
+    /* ── Computed: columns for Kanban view ── */
+    get columns() {
+      if (this.tagFilter === 'none') {
+        const untagged = this.visibleTasks.filter(t => t.tags.length === 0);
+        return untagged.length ? [{ tag: 'untagged', tasks: untagged }] : [];
+      }
+      const tags = this.tagFilter === 'all' ? this.allTags : [this.tagFilter];
+      return tags.map(tag => ({
+        tag,
+        tasks: this.visibleTasks.filter(t => t.tags.includes(tag)),
+      }));
+    },
+
+    /* ── Lifecycle ── */
+    init() {
+      this.rawText = loadFromStorage();
+      const { tasks, preferences } = parseDatabase(this.rawText);
+      this.tasks       = tasks;
+      this.preferences = preferences;
+
+      // Restore persisted UI state
+      this.theme       = preferences.theme       ?? 'auto';
+      this.tagFilter   = preferences.tagFilter   ?? 'all';
+      this.listGroupBy = preferences.listGroupBy ?? 'none';
+      this.listSortBy  = preferences.listSortBy  ?? 'title';
+      this.listSortDir = preferences.listSortDir ?? 'asc';
+
+      this._applyTheme(this.theme);
+
+      // Reactively reapply theme when it changes
+      this.$watch('theme', val => this._applyTheme(val));
+    },
+
+    /* ── Theme helpers ── */
+    _applyTheme(val) {
+      if (val === 'light')      document.documentElement.setAttribute('data-theme', 'light');
+      else if (val === 'dark')  document.documentElement.setAttribute('data-theme', 'dark');
+      else                      document.documentElement.removeAttribute('data-theme');
+    },
+
+    toggleTheme() {
+      const cycle = { auto: 'light', light: 'dark', dark: 'auto' };
+      this.theme = cycle[this.theme] ?? 'auto';
+      this.preferences.theme = this.theme;
+      this._saveDatabase();
+    },
+
+    /* ── View switching ── */
+    switchToRaw() {
+      this.rawDraft  = this.rawText;
+      this.rawEdited = false;
+      this.currentView = 'raw';
+    },
+
+    /* ── Display helpers ── */
+    displayTitle(task) {
+      if (task.title) return task.title;
+      const words = task.raw
+        .replace(/#title\([^)]*\)/g, '')
+        .replace(/#[a-zA-Z][a-zA-Z0-9_-]*/g, '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+      return words.slice(0, TITLE_FALLBACK_WORDS).join(' ') || '(empty task)';
+    },
+
+    snippet(task) {
+      const body = extractBody(task.raw);
+      const words = body.split(/\s+/).filter(Boolean);
+      const text = words.slice(0, SNIPPET_WORDS).join(' ');
+      return words.length > SNIPPET_WORDS ? text + '…' : text;
+    },
+
+    /* ── Persistence ── */
+    _saveDatabase() {
+      this.rawText = serializeDatabase(this.tasks, this.preferences);
+      saveToStorage(this.rawText);
+    },
+
+    autosave() {
+      clearTimeout(_autosaveTimer);
+      _autosaveTimer = setTimeout(() => {
+        this._saveDatabase();
+        this._toast('Saved');
+      }, AUTOSAVE_DELAY);
+    },
+
+    _toast(msg) {
+      this.statusMsg = msg;
+      setTimeout(() => { this.statusMsg = ''; }, 2000);
+    },
+
+    /* ── Stubs: wired in later phases ── */
+    exportFile()      { /* Phase 8 */ },
+    importFile()      { /* Phase 8 */ },
+    openTask()        { /* Phase 6 */ },
+    closeTask()       { /* Phase 6 */ },
+    saveRaw()         { /* Phase 7 */ },
+    discardRaw()      { /* Phase 7 */ },
+  };
+}
+</script>
+</body>
+</html>
