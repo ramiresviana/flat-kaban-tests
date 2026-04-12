@@ -274,6 +274,12 @@
       padding: var(--s5);
     }
 
+    /* Kanban panel handles its own padding via .kanban-board */
+    .view-panel.kanban-panel {
+      padding: 0;
+      overflow: hidden;
+    }
+
     /* ─────────────────────────────────────────────
        UTILITY CLASSES
        ───────────────────────────────────────────── */
@@ -304,7 +310,8 @@
       height: 100%;
       align-items: flex-start;
       overflow-x: auto;
-      padding-bottom: var(--s4);
+      padding: var(--s5);
+      padding-bottom: calc(var(--s5) + var(--s4));
     }
 
     .kanban-column {
@@ -504,6 +511,20 @@
 
     .list-group-header:hover { background: var(--border); }
 
+    .group-tag-name[style] {
+      color: hsl(var(--tag-hue, 214), 60%, 40%);
+    }
+
+    [data-theme="dark"] .group-tag-name[style] {
+      color: hsl(var(--tag-hue, 214), 70%, 65%);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) .group-tag-name[style] {
+        color: hsl(var(--tag-hue, 214), 70%, 65%);
+      }
+    }
+
     .group-chevron {
       transition: transform var(--ease);
       color: var(--text-3);
@@ -522,7 +543,12 @@
     .list-table {
       width: 100%;
       border-collapse: collapse;
+      table-layout: fixed;
     }
+
+    .list-table th:nth-child(1) { width: 28%; }
+    .list-table th:nth-child(2) { width: 52%; }
+    .list-table th:nth-child(3) { width: 20%; }
 
     .list-table th {
       padding: var(--s2) var(--s4);
@@ -551,8 +577,6 @@
     .list-title-cell {
       font-weight: 500;
       color: var(--text);
-      min-width: 140px;
-      max-width: 240px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -563,7 +587,6 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 340px;
     }
 
     .list-tags-cell {
@@ -579,20 +602,22 @@
     .modal-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.3);
+      background: rgba(0, 0, 0, 0.45);
       z-index: 100;
+      backdrop-filter: blur(2px);
     }
 
     .modal {
       position: fixed;
-      top: 0;
-      right: 0;
-      height: 100vh;
-      width: min(480px, 100vw);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
       z-index: 101;
+      width: min(640px, calc(100vw - 2 * var(--s5)));
+      max-height: calc(100vh - 4 * var(--s5));
       background: var(--surface);
-      border-left: 1px solid var(--border);
-      border-radius: var(--r3) 0 0 var(--r3);
+      border: 1px solid var(--border);
+      border-radius: var(--r3);
       box-shadow: var(--shadow-md);
       display: flex;
       flex-direction: column;
@@ -649,14 +674,6 @@
       display: flex;
       flex-direction: column;
       gap: var(--s4);
-      min-height: 0;
-    }
-
-    .modal-body-section-grow {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-height: 120px;
     }
 
     /* Tag editor */
@@ -718,7 +735,7 @@
       border-radius: 50%;
       background: transparent;
       cursor: pointer;
-      color: var(--accent);
+      color: currentColor;
       font-size: 0.75rem;
       padding: 0;
       transition: background var(--ease);
@@ -741,9 +758,9 @@
 
     /* Body textarea */
     .modal-body-textarea {
-      flex: 1;
       width: 100%;
-      resize: none;
+      min-height: 200px;
+      resize: vertical;
       padding: var(--s3);
       border: 1px solid var(--border);
       border-radius: var(--r2);
@@ -783,6 +800,7 @@
 
     .btn-danger:hover { background: var(--danger); color: #fff; }
     .btn-danger:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; }
+    .btn-danger-confirm { background: var(--danger); color: #fff; }
 
     /* ─────────────────────────────────────────────
        RAW VIEW
@@ -966,27 +984,42 @@
 
     .combobox-new-hint:hover { background: var(--surface-2); }
 
+    .kanban-board { cursor: grab; }
+    .kanban-board.is-panning { cursor: grabbing !important; user-select: none; }
+    .kanban-column { cursor: default; }
+
+    .task-card.drop-before { border-top: 2px solid var(--accent); }
+
+    .kanban-column.col-drag-over {
+      outline: 2px solid var(--accent);
+      outline-offset: -3px;
+    }
+
+    .list-drag-row { opacity: 0.4; }
+    .list-row-drop-before > td:first-child { border-top: 2px solid var(--accent) !important; }
+
     /* ─────────────────────────────────────────────
-       TOAST NOTIFICATION
+       ERROR TOAST  (top-centre, click-to-dismiss)
        ───────────────────────────────────────────── */
-    .toast {
+    .error-toast {
       position: fixed;
-      bottom: var(--s5);
-      right: var(--s5);
-      padding: var(--s2) var(--s5);
-      background: var(--text);
-      color: var(--bg);
+      top: var(--s5);
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 300px;
+      width: max-content;
+      padding: var(--s3) var(--s4);
+      background: var(--danger);
+      color: #fff;
       font-size: 0.8125rem;
       font-weight: 500;
       border-radius: var(--r2);
       box-shadow: var(--shadow-md);
-      z-index: 300;
-      pointer-events: none;
-      opacity: 1;
-      transition: opacity 200ms ease;
+      z-index: 400;
+      cursor: pointer;
+      text-align: center;
+      word-break: break-word;
     }
-
-    .toast[hidden] { display: none; }
   </style>
 </head>
 
@@ -1164,17 +1197,26 @@
   <main id="main" role="main">
 
     <!-- Kanban view -->
-    <div class="view-panel" x-show="currentView === 'kanban'" role="tabpanel" aria-label="Kanban view">
+    <div class="view-panel kanban-panel" x-show="currentView === 'kanban'" role="tabpanel" aria-label="Kanban view">
       <p class="placeholder-panel" x-show="columns.length === 0"
          x-text="tasks.length === 0 ? 'No tasks yet.' : 'No tasks match the current filter.'"></p>
 
       <!-- Board: one column per tag -->
-      <div class="kanban-board" x-show="columns.length > 0" role="list">
+      <div class="kanban-board" x-show="columns.length > 0" role="list"
+           x-ref="kanbanBoard"
+           :class="{ 'is-panning': boardPanning }"
+           @mousedown="boardMouseDown($event)">
         <template x-for="col in columns" :key="col.tag">
-          <div class="kanban-column" role="listitem">
+          <div class="kanban-column" role="listitem"
+               :class="{ 'col-drag-over': colDropTarget === col.tag && colDragSource && colDragSource !== col.tag }"
+               @dragover.prevent="colDragSource ? colHeaderDragOver($event, col.tag) : null"
+               @drop.prevent="colDragSource ? colHeaderDrop($event, col.tag) : null">
 
             <!-- Column header -->
-            <div class="kanban-column-header">
+            <div class="kanban-column-header"
+                 :draggable="col.tag !== ''"
+                 @dragstart.stop="col.tag && colHeaderDragStart($event, col.tag)"
+                 @dragend.stop="colHeaderDragEnd()">
               <span class="column-tag-name"
                     x-text="col.tag || 'All Tasks'"
                     :style="col.tag ? `--tag-hue: ${tagHue(col.tag)}` : ''"></span>
@@ -1183,10 +1225,10 @@
 
             <!-- Drop zone + cards -->
             <div class="kanban-cards"
-                 @dragover.prevent="dragOver($event, col.tag)"
+                 @dragover.prevent="col.tag === '' ? flatBoardDragOver() : dragOver($event, col.tag)"
                  @dragleave.self="dragLeave($event)"
                  @drop.prevent="dropOnColumn($event, col.tag)"
-                 :class="{ dragover: dropTarget === col.tag }"
+                 :class="{ dragover: col.tag !== '' && dropTarget === col.tag }"
                  :aria-label="col.tag + ' column drop zone'">
 
               <div class="column-empty" x-show="col.tasks.length === 0">
@@ -1198,8 +1240,12 @@
                      draggable="true"
                      @dragstart="dragStart($event, task, col.tag)"
                      @dragend="dragEnd()"
+                     @dragover.prevent="flatCardDragOver($event, task, col.tag)"
                      @click.stop="openTask(task)"
-                     :class="{ dragging: draggedTask && draggedTask.id === task.id }"
+                     :class="{
+                       dragging:     draggedTask && draggedTask.id === task.id,
+                       'drop-before': col.tag === '' && dropBeforeId === task.id
+                     }"
                      role="button"
                      tabindex="0"
                      @keydown.enter.prevent="openTask(task)"
@@ -1263,7 +1309,12 @@
                    stroke-linejoin="round" aria-hidden="true">
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
-              <span x-text="group.group || 'Untagged'"></span>
+              <span x-show="group.group && group.group !== 'untagged'"
+                    class="combobox-tag-dot"
+                    :style="`--tag-hue: ${tagHue(group.group)}`"></span>
+              <span class="group-tag-name"
+                    x-text="group.group || 'Untagged'"
+                    :style="group.group && group.group !== 'untagged' ? `--tag-hue: ${tagHue(group.group)}` : ''"></span>
               <span class="group-count" x-text="group.tasks.length + ' task' + (group.tasks.length === 1 ? '' : 's')"></span>
             </div>
 
@@ -1282,7 +1333,16 @@
                     <tr @click="openTask(task)"
                         tabindex="0"
                         @keydown.enter.prevent="openTask(task)"
-                        :aria-label="'Open task: ' + displayTitle(task)">
+                        :aria-label="'Open task: ' + displayTitle(task)"
+                        :draggable="listGroupBy === 'none'"
+                        @dragstart="listGroupBy === 'none' && listRowDragStart($event, task)"
+                        @dragover.prevent="listGroupBy === 'none' && listRowDragOver($event, task)"
+                        @drop.prevent="listGroupBy === 'none' && listRowDrop()"
+                        @dragend="listDraggedTask = null; listDropBeforeId = null"
+                        :class="{
+                          'list-drag-row':        listDraggedTask && listDraggedTask.id === task.id,
+                          'list-row-drop-before': listDropBeforeId === task.id && listGroupBy === 'none'
+                        }">
                       <td class="list-title-cell" x-text="displayTitle(task)"></td>
                       <td class="list-snippet-cell" x-text="snippet(task)"></td>
                       <td class="list-tags-cell">
@@ -1367,8 +1427,9 @@
              class="modal-title-input"
              type="text"
              placeholder="Task title…"
+             x-ref="titleInput"
              :value="selectedTask ? (selectedTask.title || '') : ''"
-             @change="updateTitle(selectedTask, $event.target.value)"
+             @input="updateTitle(selectedTask, $event.target.value)"
              aria-label="Task title" />
       <button class="modal-close-btn"
               @click="closeTask()"
@@ -1424,7 +1485,7 @@
       </div>
 
       <!-- Body text section -->
-      <div class="modal-body-section-grow">
+      <div>
         <p class="modal-section-label">Body</p>
         <textarea class="modal-body-textarea"
                   x-model="bodyText"
@@ -1439,7 +1500,9 @@
     <div class="modal-footer">
       <button class="btn-danger"
               @click="deleteTask(selectedTask)"
-              aria-label="Delete this task">Delete task</button>
+              :class="{ 'btn-danger-confirm': deleteConfirmPending }"
+              :aria-label="deleteConfirmPending ? 'Confirm task deletion' : 'Delete this task'"
+              x-text="deleteConfirmPending ? 'Confirm delete' : 'Delete task'"></button>
     </div>
 
   </div><!-- /.modal -->
@@ -1447,11 +1510,14 @@
   <!-- Toast / status live region -->
   <div role="status" aria-live="polite" aria-atomic="true" class="sr-only" x-text="statusMsg"></div>
 
-  <!-- Visible toast notification -->
-  <div class="toast"
-       x-show="statusMsg"
-       x-text="statusMsg"
-       aria-hidden="true"></div>
+  <!-- Error toast (top-centre, click to dismiss) -->
+  <div class="error-toast"
+       x-show="errorMsg"
+       x-text="errorMsg"
+       @click="errorMsg = ''"
+       role="alert"
+       aria-live="assertive"
+       title="Click to dismiss"></div>
 
 </div><!-- /#app -->
 
@@ -1464,7 +1530,7 @@ const STORAGE_KEY   = 'pk_db';
 const PREF_MARKER   = '---PREFERENCES---';
 const TASK_SEP      = '\n---\n';
 const TITLE_RE      = /#title\(([^)]*)\)/;
-const TAG_RE        = /#([a-zA-Z][a-zA-Z0-9_-]*)/g;
+const TAG_RE        = /(?<!\\)#([a-zA-Z][a-zA-Z0-9_-]*)/g;
 // A line is a "managed metadata line" if every non-empty token starts with #
 const MANAGED_LINE_RE = /^(\s*#[a-zA-Z][a-zA-Z0-9_-]*\s*)+$/;
 const TITLE_LINE_RE   = /^#title\([^)]*\)$/;
@@ -1518,6 +1584,7 @@ function parsePreferences(text) {
     theme:        'auto',
     tagFilter:    'all',
     listGroupBy:  'none',
+    tagOrder:     [],
   };
   if (!text) return defaults;
   for (const line of text.split('\n')) {
@@ -1526,7 +1593,9 @@ function parsePreferences(text) {
     const k = line.slice(0, eq).trim();
     const v = line.slice(eq + 1).trim();
     if (k in defaults) {
-      if ((k === 'tagFilter' || k === 'listGroupBy') && v.includes(',')) {
+      if (k === 'tagOrder') {
+        defaults[k] = v ? v.split(',').filter(Boolean) : [];
+      } else if ((k === 'tagFilter' || k === 'listGroupBy') && v.includes(',')) {
         defaults[k] = v.split(',').filter(Boolean);
       } else {
         defaults[k] = v;
@@ -1558,6 +1627,30 @@ function parseDatabase(text) {
   return { tasks, preferences: parsePreferences(prefText) };
 }
 
+/**
+ * escapeBody(text) → escaped text safe for raw storage.
+ * Prevents the parser from misreading body prose as tag or separator syntax.
+ *   #word  →  \#word   (avoids spurious tag detection)
+ *   ---    →  \---    (avoids task-separator split, line-anchored)
+ */
+function escapeBody(text) {
+  if (!text) return '';
+  return text
+    .replace(/(?<!\\)#([a-zA-Z])/g, '\\#$1')
+    .replace(/^---$/gm, '\\---');
+}
+
+/**
+ * unescapeBody(text) → display text.
+ * Reverses escapeBody for rendering in the UI.
+ */
+function unescapeBody(text) {
+  if (!text) return '';
+  return text
+    .replace(/\\#([a-zA-Z])/g, '#$1')
+    .replace(/^\\---$/gm, '---');
+}
+
 /* ─────────────────────────────────────────────────
    SERIALIZER  (model → text)
    Round-trip rule: tasks are stored by their .raw — never reprocessed unless
@@ -1578,18 +1671,19 @@ function extractBody(raw) {
     if (MANAGED_LINE_RE.test(t)) return false; // managed tag line
     return true;
   });
-  return bodyLines.join('\n').trimEnd();
+  return unescapeBody(bodyLines.join('\n').trimEnd());
 }
 
 /**
  * Rebuild a task block from its constituent parts.
- * Managed metadata is placed at the top; user body follows.
+ * Managed metadata is placed at the top; user body follows (escaped).
  */
 function buildTaskRaw(title, tags, body) {
   const parts = [];
   if (title && title.trim()) parts.push(`#title(${title.trim()})`);
   if (tags && tags.length)   parts.push(tags.map(t => `#${t}`).join(' '));
-  if (body && body.trim())   parts.push(body.trim());
+  const escaped = body ? escapeBody(body.trim()) : '';
+  if (escaped) parts.push(escaped);
   return parts.join('\n');
 }
 
@@ -1668,6 +1762,7 @@ function saveToStorage(text) {
    ───────────────────────────────────────────────── */
 function kanbanApp() {
   let _autosaveTimer = null;
+  let _deleteTimer   = null;
 
   return {
     /* ── State ── */
@@ -1683,39 +1778,60 @@ function kanbanApp() {
     draggedTask:       null,
     dragSourceColumn:  null,
     dropTarget:        null,
+    dropBeforeId:      null,
+
+    colDragSource:    null,
+    colDropTarget:    null,
+    tagOrder:         [],
+    boardPanning:     false,
+
+    listDraggedTask:  null,
+    listDropBeforeId: null,
 
     listGroupBy:    'none',
     collapsedGroups: [],
 
-    selectedTask:   null,
-    modalOpen:      false,
-    bodyText:       '',
+    selectedTask:         null,
+    modalOpen:            false,
+    bodyText:             '',
+    deleteConfirmPending: false,
 
     rawDraft:       '',
     rawEdited:      false,
+
+    errorMsg:       '',
+
+    _externalUpdate: false,
 
     colCb:   { open: false, search: '' },
     groupCb: { open: false, search: '' },
     tagCb:   { open: false, search: '' },
 
-    /* ── Computed: all unique sorted tags across all tasks ── */
+    /* ── Computed: all unique tags (alphabetical) ── */
     get allTags() {
       const set = new Set();
       this.tasks.forEach(t => t.tags.forEach(tag => set.add(tag)));
       return [...set].sort();
     },
 
-    /* ── Computed: tasks filtered by tagFilter + searchQuery ── */
+    /* ── Computed: tags sorted by tagOrder preference ── */
+    get sortedAllTags() {
+      const order = Array.isArray(this.tagOrder) ? this.tagOrder : [];
+      const all = [...this.allTags];
+      if (!order.length) return all;
+      return all.sort((a, b) => {
+        const ia = order.indexOf(a);
+        const ib = order.indexOf(b);
+        if (ia >= 0 && ib >= 0) return ia - ib;
+        if (ia >= 0) return -1;
+        if (ib >= 0) return 1;
+        return a.localeCompare(b);
+      });
+    },
+
+    /* ── Computed: tasks filtered by searchQuery only ── */
     get visibleTasks() {
       let result = this.tasks;
-      const tf = this.tagFilter;
-
-      if (tf === 'all') {
-        result = result.filter(t => t.tags.length > 0);
-      } else if (tf !== 'none') {
-        const tags = Array.isArray(tf) ? tf : [tf];
-        result = result.filter(t => tags.some(tag => t.tags.includes(tag)));
-      }
 
       if (this.searchQuery.trim()) {
         const q = this.searchQuery.toLowerCase();
@@ -1727,20 +1843,34 @@ function kanbanApp() {
       return result;
     },
 
+    /* ── Computed: tasks filtered for kanban view (tagFilter + search) ── */
+    get kanbanTasks() {
+      let result = this.visibleTasks;
+      const tf = this.tagFilter;
+
+      if (tf === 'all') {
+        result = result.filter(t => t.tags.length > 0);
+      } else if (tf !== 'none') {
+        const tags = Array.isArray(tf) ? tf : [tf];
+        result = result.filter(t => tags.some(tag => t.tags.includes(tag)));
+      }
+      return result;
+    },
+
     /* ── Computed: columns for Kanban view ── */
     get columns() {
       const tf = this.tagFilter;
       if (tf === 'none') {
-        return this.visibleTasks.length
-          ? [{ tag: '', tasks: this.visibleTasks }]
+        return this.kanbanTasks.length
+          ? [{ tag: '', tasks: this.kanbanTasks }]
           : [];
       }
-      const tags = tf === 'all' ? this.allTags
+      const tags = tf === 'all' ? this.sortedAllTags
                  : Array.isArray(tf) ? tf
                  : [tf];
       return tags.map(tag => ({
         tag,
-        tasks: this.visibleTasks.filter(t => t.tags.includes(tag)),
+        tasks: this.kanbanTasks.filter(t => t.tags.includes(tag)),
       }));
     },
 
@@ -1752,7 +1882,7 @@ function kanbanApp() {
       }
       if (lg === 'all') {
         const result = [];
-        for (const tag of this.allTags) {
+        for (const tag of this.sortedAllTags) {
           const tasks = this.visibleTasks.filter(t => t.tags.includes(tag));
           if (tasks.length) result.push({ group: tag, tasks });
         }
@@ -1783,6 +1913,7 @@ function kanbanApp() {
       this.theme       = preferences.theme       ?? 'auto';
       this.tagFilter   = preferences.tagFilter   ?? 'all';
       this.listGroupBy = preferences.listGroupBy ?? 'none';
+      this.tagOrder    = preferences.tagOrder    ?? [];
 
       this._applyTheme(this.theme);
 
@@ -1792,6 +1923,18 @@ function kanbanApp() {
       // Persist UI preference changes back to the database file
       this.$watch('tagFilter',   val => { this.preferences.tagFilter   = val; this._saveDatabase(); });
       this.$watch('listGroupBy', val => { this.preferences.listGroupBy = val; this._saveDatabase(); });
+
+      // Global error handlers — show error toast on unhandled errors
+      window.onerror = (msg) => { this.errorMsg = String(msg); return false; };
+      window.addEventListener('unhandledrejection', (e) => {
+        this.errorMsg = e.reason?.message ?? String(e.reason);
+      });
+
+      // Multi-tab sync — reload when another tab writes to localStorage
+      window.addEventListener('storage', (e) => {
+        if (e.key !== STORAGE_KEY || e.newValue === null) return;
+        this._reloadFromStorage(e.newValue);
+      });
     },
 
     /* ── Theme helpers ── */
@@ -1930,8 +2073,24 @@ function kanbanApp() {
 
     /* ── Persistence ── */
     _saveDatabase() {
+      if (this._externalUpdate) return;
       this.rawText = serializeDatabase(this.tasks, this.preferences);
       saveToStorage(this.rawText);
+    },
+
+    /** Reload in-memory state from a raw text string (called on storage events from other tabs). */
+    _reloadFromStorage(rawText) {
+      this._externalUpdate = true;
+      const { tasks, preferences } = parseDatabase(rawText);
+      this.rawText     = rawText;
+      this.tasks       = tasks;
+      this.preferences = preferences;
+      this.theme       = preferences.theme       ?? 'auto';
+      this.tagFilter   = preferences.tagFilter   ?? 'all';
+      this.listGroupBy = preferences.listGroupBy ?? 'none';
+      this.tagOrder    = preferences.tagOrder    ?? [];
+      this._applyTheme(this.theme);
+      this.$nextTick(() => { this._externalUpdate = false; });
     },
 
     autosave() {
@@ -1971,14 +2130,18 @@ function kanbanApp() {
       reader.onload = (e) => {
         const text = e.target.result;
         if (typeof text !== 'string') return;
-        this.rawText = text;
         const { tasks, preferences } = parseDatabase(text);
+        // Normalize: rebuild each task raw with escaping applied for data integrity
+        tasks.forEach(task => {
+          task.raw = buildTaskRaw(task.title, task.tags, extractBody(task.raw));
+        });
         this.tasks       = tasks;
         this.preferences = preferences;
         this.theme       = preferences.theme       ?? 'auto';
         this.tagFilter   = preferences.tagFilter   ?? 'all';
         this.listGroupBy = preferences.listGroupBy ?? 'none';
-
+        this.tagOrder    = preferences.tagOrder    ?? [];
+        this._saveDatabase();
       };
       reader.onerror = () => this._toast('Import failed — could not read file');
       reader.readAsText(file, 'utf-8');
@@ -1991,15 +2154,20 @@ function kanbanApp() {
        ───────────────────────────────────────────── */
 
     saveRaw() {
-      this.rawText  = this.rawDraft;
-      const { tasks, preferences } = parseDatabase(this.rawText);
+      const { tasks, preferences } = parseDatabase(this.rawDraft);
+      // Normalize: rebuild each task raw with escaping applied for data integrity
+      tasks.forEach(task => {
+        task.raw = buildTaskRaw(task.title, task.tags, extractBody(task.raw));
+      });
       this.tasks       = tasks;
       this.preferences = preferences;
       // Restore UI state that may have changed in raw text
       this.theme       = preferences.theme       ?? 'auto';
       this.tagFilter   = preferences.tagFilter   ?? 'all';
       this.listGroupBy = preferences.listGroupBy ?? 'none';
-      saveToStorage(this.rawText);
+      this.tagOrder    = preferences.tagOrder    ?? [];
+      this._saveDatabase();
+      this.rawDraft  = this.rawText;
       this.rawEdited = false;
       this._toast('Saved');
     },
@@ -2019,15 +2187,28 @@ function kanbanApp() {
       this.tagCb.search = '';
       this.modalOpen    = true;
       this.$nextTick(() => {
+        const selector = task.title ? '.modal-close-btn' : 'input, textarea, button';
         const modal = this.$refs.modal;
         if (modal) {
-          const first = modal.querySelector('input, textarea, button');
+          const first = modal.querySelector(selector);
           if (first) first.focus();
         }
       });
     },
 
     closeTask() {
+      if (this.selectedTask) {
+        // Flush pending debounced edits before clearing state
+        clearTimeout(_autosaveTimer);
+        this.selectedTask.raw = buildTaskRaw(
+          this.selectedTask.title,
+          this.selectedTask.tags,
+          this.bodyText
+        );
+        this._saveDatabase();
+      }
+      clearTimeout(_deleteTimer);
+      this.deleteConfirmPending = false;
       this.modalOpen    = false;
       this.selectedTask = null;
       this.tagCb.search = '';
@@ -2062,9 +2243,19 @@ function kanbanApp() {
 
     deleteTask(task) {
       if (!task) return;
-      if (!confirm(`Delete "${this.displayTitle(task)}"?`)) return;
-      this.tasks   = this.tasks.filter(t => t.id !== task.id);
-      this.closeTask();
+      if (!this.deleteConfirmPending) {
+        this.deleteConfirmPending = true;
+        _deleteTimer = setTimeout(() => { this.deleteConfirmPending = false; }, 3000);
+        return;
+      }
+      clearTimeout(_deleteTimer);
+      this.deleteConfirmPending = false;
+      const id = task.id;
+      this.modalOpen    = false;
+      this.selectedTask = null;
+      this.tagCb.search = '';
+      this.tagCb.open   = false;
+      this.tasks = this.tasks.filter(t => t.id !== id);
       this._saveDatabase();
       this._toast('Task deleted');
     },
@@ -2112,20 +2303,40 @@ function kanbanApp() {
       this.draggedTask      = null;
       this.dragSourceColumn = null;
       this.dropTarget       = null;
+      this.dropBeforeId     = null;
     },
 
     dropOnColumn(event, targetTag) {
+      // Ignore drops initiated by column header drags
+      if (this.colDragSource !== null) return;
+
       const taskId = parseInt(event.dataTransfer.getData('text/plain'), 10);
       const task   = this.tasks.find(t => t.id === taskId);
       this.dropTarget = null;
 
-      if (!task) return;
-      const sourceTag = this.dragSourceColumn;
-      if (targetTag === sourceTag) return;
+      if (!task) { this.dropBeforeId = null; this.dragEnd(); return; }
 
-      // Build new tag list: remove source column tag, add target column tag
+      if (targetTag === '') {
+        // Flat mode ("None" column): reorder tasks array
+        const newOrder = this.tasks.filter(t => t.id !== task.id);
+        const beforeIdx = this.dropBeforeId !== null
+          ? newOrder.findIndex(t => t.id === this.dropBeforeId)
+          : -1;
+        if (beforeIdx >= 0) newOrder.splice(beforeIdx, 0, task);
+        else newOrder.push(task);
+        this.tasks = newOrder;
+        this.dropBeforeId = null;
+        this._saveDatabase();
+        this.dragEnd();
+        return;
+      }
+
+      const sourceTag = this.dragSourceColumn;
+      if (targetTag === sourceTag) { this.dragEnd(); return; }
+
+      // Add target column tag (skip empty tags from "None" column)
       let newTags = task.tags.filter(t => t !== sourceTag);
-      if (!newTags.includes(targetTag)) newTags = [...newTags, targetTag];
+      if (targetTag && !newTags.includes(targetTag)) newTags = [...newTags, targetTag];
 
       this._applyTagUpdate(task, newTags);
       this.dragEnd();
@@ -2148,6 +2359,130 @@ function kanbanApp() {
       this.tasks.push(task);
       this.autosave();
       this.openTask(task);
+    },
+
+    /* ─────────────────────────────────────────────
+       FLAT CARD DRAG (position in column)
+       ───────────────────────────────────────────── */
+
+    /** Per-card dragover for the flat "None" column — computes dropBeforeId. */
+    flatCardDragOver(event, task, colTag) {
+      if (colTag !== '') return; // only in flat column
+      const rect = event.currentTarget.getBoundingClientRect();
+      if (event.clientY < rect.top + rect.height / 2) {
+        this.dropBeforeId = task.id;
+      } else {
+        const idx  = this.visibleTasks.findIndex(t => t.id === task.id);
+        const next = this.visibleTasks[idx + 1];
+        this.dropBeforeId = next ? next.id : null;
+      }
+    },
+
+    /** Dragover on the kanban-cards area below all cards in flat column — clears dropBeforeId. */
+    flatBoardDragOver() {
+      this.dropBeforeId = null;
+    },
+
+    /* ─────────────────────────────────────────────
+       COLUMN REORDER DRAG
+       ───────────────────────────────────────────── */
+
+    colHeaderDragStart(event, tag) {
+      this.colDragSource = tag;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', `col:${tag}`);
+    },
+
+    colHeaderDragOver(event, tag) {
+      if (this.colDragSource && this.colDragSource !== tag) {
+        this.colDropTarget = tag;
+      }
+    },
+
+    colHeaderDrop(event, tag) {
+      const src = this.colDragSource;
+      this.colDragSource = null;
+      this.colDropTarget = null;
+      if (!src || src === tag) return;
+
+      const ordered = [...this.sortedAllTags];
+      const srcIdx  = ordered.indexOf(src);
+      const dstIdx  = ordered.indexOf(tag);
+      if (srcIdx === -1 || dstIdx === -1) return;
+
+      ordered.splice(srcIdx, 1);
+      ordered.splice(dstIdx, 0, src);
+      this.tagOrder             = ordered;
+      this.preferences.tagOrder = ordered;
+      this._saveDatabase();
+    },
+
+    colHeaderDragEnd() {
+      this.colDragSource = null;
+      this.colDropTarget = null;
+    },
+
+    /* ─────────────────────────────────────────────
+       KANBAN BOARD HORIZONTAL SCROLL (mouse-hold)
+       ───────────────────────────────────────────── */
+
+    boardMouseDown(event) {
+      // Do not intercept clicks on interactive elements
+      if (event.target.closest('.task-card, button, input, textarea, a, select')) return;
+      if (event.button !== 0) return;
+
+      const board      = this.$refs.kanbanBoard;
+      const startX     = event.pageX;
+      const startLeft  = board.scrollLeft;
+      this.boardPanning = true;
+
+      const onMove = (e) => {
+        board.scrollLeft = startLeft - (e.pageX - startX);
+      };
+      const onUp = () => {
+        this.boardPanning = false;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+      event.preventDefault();
+    },
+
+    /* ─────────────────────────────────────────────
+       LIST ROW DRAG (reorder)
+       ───────────────────────────────────────────── */
+
+    listRowDragStart(event, task) {
+      this.listDraggedTask = task;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', String(task.id));
+    },
+
+    listRowDragOver(event, task) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      if (event.clientY < rect.top + rect.height / 2) {
+        this.listDropBeforeId = task.id;
+      } else {
+        const idx  = this.visibleTasks.findIndex(t => t.id === task.id);
+        const next = this.visibleTasks[idx + 1];
+        this.listDropBeforeId = next ? next.id : null;
+      }
+    },
+
+    listRowDrop() {
+      const task = this.listDraggedTask;
+      if (!task) return;
+      const newOrder  = this.tasks.filter(t => t.id !== task.id);
+      const beforeIdx = this.listDropBeforeId !== null
+        ? newOrder.findIndex(t => t.id === this.listDropBeforeId)
+        : -1;
+      if (beforeIdx >= 0) newOrder.splice(beforeIdx, 0, task);
+      else newOrder.push(task);
+      this.tasks            = newOrder;
+      this.listDraggedTask  = null;
+      this.listDropBeforeId = null;
+      this._saveDatabase();
     },
 
     /* ─────────────────────────────────────────────
