@@ -578,6 +578,302 @@
     }
 
     .list-tags-cell .tag-chip { margin-right: 3px; }
+
+    /* ─────────────────────────────────────────────
+       TASK DETAILS MODAL
+       ───────────────────────────────────────────── */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 100;
+      backdrop-filter: blur(2px);
+    }
+
+    .modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 101;
+      width: min(640px, calc(100vw - 2 * var(--s5)));
+      max-height: calc(100vh - 4 * var(--s5));
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r3);
+      box-shadow: var(--shadow-md);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--s3);
+      padding: var(--s4) var(--s5);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .modal-title-input {
+      flex: 1;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      outline: none;
+      padding: 0;
+      line-height: 1.4;
+    }
+
+    .modal-title-input::placeholder { color: var(--text-3); font-weight: 400; }
+    .modal-title-input:focus { border-bottom: 2px solid var(--border-focus); }
+
+    .modal-close-btn {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: var(--r1);
+      background: transparent;
+      cursor: pointer;
+      color: var(--text-2);
+      font-size: 1rem;
+      transition: background var(--ease), color var(--ease);
+    }
+
+    .modal-close-btn:hover { background: var(--surface-2); color: var(--text); }
+    .modal-close-btn:focus-visible { outline: 2px solid var(--border-focus); }
+
+    .modal-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--s4) var(--s5);
+      display: flex;
+      flex-direction: column;
+      gap: var(--s4);
+    }
+
+    /* Tag editor */
+    .modal-section-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-3);
+      margin-bottom: var(--s2);
+    }
+
+    .tag-editor {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--s1);
+      align-items: center;
+      padding: var(--s2);
+      border: 1px solid var(--border);
+      border-radius: var(--r2);
+      min-height: 38px;
+      background: var(--surface-2);
+      cursor: text;
+    }
+
+    .tag-editor:focus-within { border-color: var(--border-focus); background: var(--surface); }
+
+    .tag-chip-removable {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 2px 4px 2px 8px;
+      border-radius: 999px;
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .tag-remove-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border: none;
+      border-radius: 50%;
+      background: transparent;
+      cursor: pointer;
+      color: var(--accent);
+      font-size: 0.75rem;
+      padding: 0;
+      transition: background var(--ease);
+    }
+
+    .tag-remove-btn:hover { background: var(--accent); color: #fff; }
+
+    .tag-add-input {
+      flex: 1;
+      min-width: 100px;
+      border: none;
+      background: transparent;
+      outline: none;
+      font-size: 0.8125rem;
+      color: var(--text);
+      padding: 2px 0;
+    }
+
+    .tag-add-input::placeholder { color: var(--text-3); }
+
+    /* Body textarea */
+    .modal-body-textarea {
+      width: 100%;
+      min-height: 200px;
+      resize: vertical;
+      padding: var(--s3);
+      border: 1px solid var(--border);
+      border-radius: var(--r2);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 0.875rem;
+      line-height: 1.6;
+      font-family: var(--font);
+    }
+
+    .modal-body-textarea:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      background: var(--surface);
+    }
+
+    /* Modal footer (delete button) */
+    .modal-footer {
+      padding: var(--s3) var(--s5);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      flex-shrink: 0;
+    }
+
+    .btn-danger {
+      padding: var(--s1) var(--s4);
+      border: 1px solid var(--danger);
+      border-radius: var(--r1);
+      background: transparent;
+      color: var(--danger);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background var(--ease), color var(--ease);
+    }
+
+    .btn-danger:hover { background: var(--danger); color: #fff; }
+    .btn-danger:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; }
+
+    /* ─────────────────────────────────────────────
+       RAW VIEW
+       ───────────────────────────────────────────── */
+    .raw-view {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .raw-toolbar {
+      display: flex;
+      align-items: center;
+      gap: var(--s3);
+      padding: var(--s2) var(--s5);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .unsaved-badge {
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .btn-primary {
+      padding: var(--s1) var(--s4);
+      border: 1px solid var(--accent);
+      border-radius: var(--r1);
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background var(--ease);
+    }
+
+    .btn-primary:hover { background: var(--accent-hi); }
+    .btn-primary:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+    .btn-primary:disabled { opacity: 0.45; cursor: default; }
+
+    .btn-secondary {
+      padding: var(--s1) var(--s4);
+      border: 1px solid var(--border);
+      border-radius: var(--r1);
+      background: transparent;
+      color: var(--text-2);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background var(--ease), color var(--ease);
+    }
+
+    .btn-secondary:hover { background: var(--surface-2); color: var(--text); }
+    .btn-secondary:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+
+    .raw-hint {
+      font-size: 0.75rem;
+      color: var(--text-3);
+      margin-left: auto;
+    }
+
+    .raw-editor {
+      flex: 1;
+      resize: none;
+      border: none;
+      outline: none;
+      padding: var(--s5);
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Menlo', 'Consolas', 'Liberation Mono', monospace;
+      font-size: 0.8125rem;
+      line-height: 1.7;
+      tab-size: 2;
+    }
+
+    .raw-editor:focus { background: var(--surface); }
+
+    /* ─────────────────────────────────────────────
+       TOAST NOTIFICATION
+       ───────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: var(--s5);
+      right: var(--s5);
+      padding: var(--s2) var(--s5);
+      background: var(--text);
+      color: var(--bg);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      border-radius: var(--r2);
+      box-shadow: var(--shadow-md);
+      z-index: 300;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 200ms ease;
+    }
+
+    .toast[hidden] { display: none; }
   </style>
 </head>
 
@@ -687,7 +983,7 @@
 
   <!-- ── SUB-HEADER (filters) — hidden in Raw view ── -->
   <div id="subheader" x-show="currentView !== 'raw'">
-    <span class="filter-label">Column</span>
+    <span class="filter-label">Columns</span>
     <select class="filter-select"
             x-model="tagFilter"
             aria-label="Tag filter">
@@ -711,7 +1007,7 @@
     <!-- Kanban view (Phase 4) -->
     <div class="view-panel" x-show="currentView === 'kanban'" role="tabpanel" aria-label="Kanban view">
       <p class="placeholder-panel" x-show="columns.length === 0"
-         x-text="tasks.length === 0 ? 'No tasks yet.' : 'No columns to display. Change the Column filter.'"></p>
+         x-text="tasks.length === 0 ? 'No tasks yet.' : 'No tasks match the current filter.'"></p>
 
       <!-- Board: one column per tag -->
       <div class="kanban-board" x-show="columns.length > 0" role="list">
@@ -888,16 +1184,132 @@
     </div>
 
     <!-- Raw view (Phase 7) -->
-    <div class="view-panel" style="padding:0" x-show="currentView === 'raw'" role="tabpanel" aria-label="Raw view">
-      <p class="placeholder-panel">Raw view — coming in Phase 7.</p>
+    <div class="raw-view" x-show="currentView === 'raw'" role="tabpanel" aria-label="Raw view">
+
+      <!-- Toolbar -->
+      <div class="raw-toolbar">
+        <span x-show="rawEdited" class="unsaved-badge" role="status" aria-live="polite">Unsaved changes</span>
+        <button class="btn-primary"
+                @click="saveRaw()"
+                :disabled="!rawEdited"
+                aria-label="Save raw database">Save</button>
+        <button class="btn-secondary"
+                @click="discardRaw()"
+                :disabled="!rawEdited"
+                aria-label="Discard raw changes">Discard</button>
+        <span class="raw-hint">Edit the plain-text database directly. Click Save to apply.</span>
+      </div>
+
+      <!-- Full-height text editor -->
+      <textarea class="raw-editor"
+                x-model="rawDraft"
+                @input="rawEdited = rawDraft !== rawText"
+                spellcheck="false"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                aria-label="Raw database content"
+                aria-multiline="true"></textarea>
+
     </div>
 
   </main><!-- /main -->
 
   <!-- Task detail modal injected in Phase 6 -->
 
+  <!-- ─────────────────────────────────────────────
+       TASK DETAILS MODAL (Phase 6)
+       role=dialog with keyboard trap; Escape closes.
+  ───────────────────────────────────────────────── -->
+
+  <!-- Backdrop — click to close -->
+  <div class="modal-backdrop"
+       x-show="modalOpen"
+       @click="closeTask()"
+       aria-hidden="true"></div>
+
+  <!-- Modal panel -->
+  <div class="modal"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="modal-task-title"
+       x-show="modalOpen"
+       x-ref="modal"
+       @keydown.escape.window="closeTask()"
+       @keydown.tab="trapFocus($event)">
+
+    <!-- Header: title + close -->
+    <div class="modal-header">
+      <input id="modal-task-title"
+             class="modal-title-input"
+             type="text"
+             placeholder="Task title…"
+             :value="selectedTask ? (selectedTask.title || '') : ''"
+             @change="updateTitle(selectedTask, $event.target.value)"
+             aria-label="Task title" />
+      <button class="modal-close-btn"
+              @click="closeTask()"
+              aria-label="Close task detail">✕</button>
+    </div>
+
+    <!-- Body: tags + textarea -->
+    <div class="modal-body">
+
+      <!-- Tag section -->
+      <div>
+        <p class="modal-section-label">Tags</p>
+        <div class="tag-editor" @click="$refs.tagInput.focus()">
+          <template x-if="selectedTask">
+            <template x-for="tag in selectedTask.tags" :key="tag">
+              <span class="tag-chip-removable">
+                #<span x-text="tag"></span>
+                <button class="tag-remove-btn"
+                        @click.stop="removeTag(selectedTask, tag)"
+                        :aria-label="'Remove tag ' + tag">✕</button>
+              </span>
+            </template>
+          </template>
+          <input class="tag-add-input"
+                 type="text"
+                 placeholder="Add tag…"
+                 x-ref="tagInput"
+                 x-model="newTagInput"
+                 @keydown.enter.prevent="commitNewTag()"
+                 @keydown.comma.prevent="commitNewTag()"
+                 @keydown.backspace="newTagInput === '' && selectedTask && selectedTask.tags.length && removeTag(selectedTask, selectedTask.tags[selectedTask.tags.length - 1])"
+                 aria-label="Add a new tag" />
+        </div>
+      </div>
+
+      <!-- Body text section -->
+      <div>
+        <p class="modal-section-label">Body</p>
+        <textarea class="modal-body-textarea"
+                  x-model="bodyText"
+                  @input.debounce.400ms="updateBody(selectedTask, $event.target.value)"
+                  placeholder="Task notes…"
+                  aria-label="Task body"></textarea>
+      </div>
+
+    </div><!-- /modal-body -->
+
+    <!-- Footer: delete -->
+    <div class="modal-footer">
+      <button class="btn-danger"
+              @click="deleteTask(selectedTask)"
+              aria-label="Delete this task">Delete task</button>
+    </div>
+
+  </div><!-- /.modal -->
+
   <!-- Toast / status live region -->
   <div role="status" aria-live="polite" aria-atomic="true" class="sr-only" x-text="statusMsg"></div>
+
+  <!-- Visible toast notification -->
+  <div class="toast"
+       x-show="statusMsg"
+       x-text="statusMsg"
+       aria-hidden="true"></div>
 
 </div><!-- /#app -->
 
@@ -1175,8 +1587,10 @@ function kanbanApp() {
     /* ── Computed: columns for Kanban view ── */
     get columns() {
       if (this.tagFilter === 'none') {
-        const untagged = this.visibleTasks.filter(t => t.tags.length === 0);
-        return untagged.length ? [{ tag: 'untagged', tasks: untagged }] : [];
+        // No tag grouping: single flat column showing all visible tasks
+        return this.visibleTasks.length
+          ? [{ tag: 'All Tasks', tasks: this.visibleTasks }]
+          : [];
       }
       const tags = this.tagFilter === 'all' ? this.allTags : [this.tagFilter];
       return tags.map(tag => ({
@@ -1226,6 +1640,10 @@ function kanbanApp() {
 
       // Reactively reapply theme when it changes
       this.$watch('theme', val => this._applyTheme(val));
+
+      // Persist UI preference changes back to the database file
+      this.$watch('tagFilter',   val => { this.preferences.tagFilter   = val; this._saveDatabase(); });
+      this.$watch('listGroupBy', val => { this.preferences.listGroupBy = val; this._saveDatabase(); });
     },
 
     /* ── Theme helpers ── */
@@ -1288,12 +1706,158 @@ function kanbanApp() {
     },
 
     /* ── Stubs: wired in later phases ── */
-    exportFile()      { /* Phase 8 */ },
-    importFile()      { /* Phase 8 */ },
-    openTask()        { /* Phase 6 */ },
-    closeTask()       { /* Phase 6 */ },
-    saveRaw()         { /* Phase 7 */ },
-    discardRaw()      { /* Phase 7 */ },
+
+    /* ─────────────────────────────────────────────
+       PHASE 8: EXPORT / IMPORT
+       ───────────────────────────────────────────── */
+
+    exportFile() {
+      const blob = new Blob([this.rawText], { type: 'text/plain; charset=utf-8' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'plain-kanban.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      this._toast('Exported');
+    },
+
+    importFile(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target.result;
+        if (typeof text !== 'string') return;
+        this.rawText = text;
+        const { tasks, preferences } = parseDatabase(text);
+        this.tasks       = tasks;
+        this.preferences = preferences;
+        this.theme       = preferences.theme       ?? 'auto';
+        this.tagFilter   = preferences.tagFilter   ?? 'all';
+        this.listGroupBy = preferences.listGroupBy ?? 'none';
+        this.listSortBy  = preferences.listSortBy  ?? 'title';
+        this.listSortDir = preferences.listSortDir ?? 'asc';
+        this._applyTheme(this.theme);
+        saveToStorage(text);
+        this._toast(`Imported ${tasks.length} task${tasks.length === 1 ? '' : 's'}`);
+      };
+      reader.onerror = () => this._toast('Import failed — could not read file');
+      reader.readAsText(file, 'utf-8');
+      // Reset so same file can be re-imported
+      event.target.value = '';
+    },
+
+    /* ─────────────────────────────────────────────
+       PHASE 7: RAW VIEW
+       ───────────────────────────────────────────── */
+
+    saveRaw() {
+      this.rawText  = this.rawDraft;
+      const { tasks, preferences } = parseDatabase(this.rawText);
+      this.tasks       = tasks;
+      this.preferences = preferences;
+      // Restore UI state that may have changed in raw text
+      this.theme       = preferences.theme       ?? 'auto';
+      this.tagFilter   = preferences.tagFilter   ?? 'all';
+      this.listGroupBy = preferences.listGroupBy ?? 'none';
+      this.listSortBy  = preferences.listSortBy  ?? 'title';
+      this.listSortDir = preferences.listSortDir ?? 'asc';
+      saveToStorage(this.rawText);
+      this.rawEdited = false;
+      this._toast('Saved');
+    },
+
+    discardRaw() {
+      this.rawDraft  = this.rawText;
+      this.rawEdited = false;
+    },
+
+    /* ─────────────────────────────────────────────
+       PHASE 6: TASK DETAILS MODAL
+       ───────────────────────────────────────────── */
+
+    openTask(task) {
+      this.selectedTask = task;
+      this.bodyText     = extractBody(task.raw);
+      this.newTagInput  = '';
+      this.modalOpen    = true;
+      this.$nextTick(() => {
+        const modal = this.$refs.modal;
+        if (modal) {
+          const first = modal.querySelector('input, textarea, button');
+          if (first) first.focus();
+        }
+      });
+    },
+
+    closeTask() {
+      this.modalOpen    = false;
+      this.selectedTask = null;
+      this.newTagInput  = '';
+    },
+
+    updateTitle(task, newTitle) {
+      if (!task) return;
+      const trimmed = newTitle.trim();
+      task.title = trimmed || null;
+      task.raw   = buildTaskRaw(task.title, task.tags, extractBody(task.raw));
+      this.autosave();
+    },
+
+    updateBody(task, newBody) {
+      if (!task) return;
+      task.raw = buildTaskRaw(task.title, task.tags, newBody);
+      this.autosave();
+    },
+
+    addTag(task, rawInput) {
+      if (!task) return;
+      const tag = rawInput.toLowerCase().replace(/[^a-z0-9_-]/g, '').trim();
+      if (!tag || task.tags.includes(tag)) return;
+      this._applyTagUpdate(task, [...task.tags, tag]);
+    },
+
+    removeTag(task, tag) {
+      if (!task) return;
+      this._applyTagUpdate(task, task.tags.filter(t => t !== tag));
+    },
+
+    commitNewTag() {
+      if (!this.newTagInput.trim()) return;
+      this.addTag(this.selectedTask, this.newTagInput);
+      this.newTagInput = '';
+    },
+
+    deleteTask(task) {
+      if (!task) return;
+      if (!confirm(`Delete "${this.displayTitle(task)}"?`)) return;
+      this.tasks   = this.tasks.filter(t => t.id !== task.id);
+      this.closeTask();
+      this._saveDatabase();
+      this._toast('Task deleted');
+    },
+
+    /** Basic focus trap: cycle Tab within the modal element. */
+    trapFocus(event) {
+      const modal    = this.$refs.modal;
+      if (!modal) return;
+      const focusable = [...modal.querySelectorAll(
+        'button, input, textarea, select, [tabindex]:not([tabindex="-1"])'
+      )].filter(el => !el.disabled);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last  = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
 
     /* ─────────────────────────────────────────────
        PHASE 4: KANBAN DRAG-AND-DROP
