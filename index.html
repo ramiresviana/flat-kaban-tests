@@ -333,7 +333,22 @@
       align-items: center;
       justify-content: space-between;
       gap: var(--s2);
+      position: relative;
     }
+
+    /* Column header drag handle — replaces counter on hover */
+    .column-count { transition: opacity var(--ease); }
+    .kanban-column-header:hover .column-count { opacity: 0; }
+    .column-drag-handle {
+      position: absolute;
+      right: var(--s4);
+      color: var(--text);
+      opacity: 0;
+      transition: opacity var(--ease);
+      line-height: 0;
+      cursor: grab;
+    }
+    .kanban-column-header:hover .column-drag-handle { opacity: 1; }
 
     .column-tag-name {
       font-weight: 600;
@@ -404,6 +419,20 @@
     }
 
     .task-card.dragging { opacity: 0.35; }
+
+    /* Drag handle — top-right of card, visible on hover */
+    .task-card { position: relative; }
+    .task-card-drag-handle {
+      position: absolute;
+      top: var(--s2);
+      right: var(--s2);
+      color: var(--text);
+      opacity: 0;
+      transition: opacity var(--ease);
+      line-height: 0;
+      cursor: grab;
+    }
+    .task-card:hover .task-card-drag-handle { opacity: 1; }
 
     .task-card-title {
       font-size: 0.875rem;
@@ -546,6 +575,17 @@
       table-layout: fixed;
     }
 
+    /* List row drag handle — prepended to title, visible on hover */
+    .list-drag-handle {
+      display: inline-flex;
+      color: var(--text);
+      opacity: 0;
+      transition: opacity var(--ease);
+      vertical-align: top;
+      cursor: grab;
+    }
+    .list-table tr:hover .list-drag-handle { opacity: 1; }
+
     .list-table th:nth-child(1) { width: 28%; }
     .list-table th:nth-child(2) { width: 52%; }
     .list-table th:nth-child(3) { width: 20%; }
@@ -613,7 +653,8 @@
       left: 50%;
       transform: translate(-50%, -50%);
       z-index: 101;
-      width: min(640px, calc(100vw - 2 * var(--s5)));
+      width: min(1200px, calc(100vw - 2 * var(--s5)));
+      height: min(800px, calc(100vh - 2 * var(--s5)));
       max-height: calc(100vh - 4 * var(--s5));
       background: var(--surface);
       border: 1px solid var(--border);
@@ -622,6 +663,13 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+    }
+
+    .modal-body-section-grow {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 120px;
     }
 
     .modal-header {
@@ -758,9 +806,10 @@
 
     /* Body textarea */
     .modal-body-textarea {
+      flex: 1;
       width: 100%;
       min-height: 200px;
-      resize: vertical;
+      resize: none;
       padding: var(--s3);
       border: 1px solid var(--border);
       border-radius: var(--r2);
@@ -988,15 +1037,38 @@
     .kanban-board.is-panning { cursor: grabbing !important; user-select: none; }
     .kanban-column { cursor: default; }
 
-    .task-card.drop-before { border-top: 2px solid var(--accent); }
+    /* Drop-line indicator between cards (doesn't shift layout) */
+    .task-card.drop-line-before { position: relative; }
+    .task-card.drop-line-before::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(-2 * var(--s1) + 2px);
+      height: 2px;
+      background: var(--accent);
+      border-radius: 1px;
+      pointer-events: none;
+      z-index: 5;
+    }
 
-    .kanban-column.col-drag-over {
-      outline: 2px solid var(--accent);
-      outline-offset: -3px;
+    /* Column drag-over: draw a line to the left of the hovered column */
+    .kanban-column.col-drop-line-before { position: relative; }
+    .kanban-column.col-drop-line-before::before {
+      content: '';
+      position: absolute;
+      left: calc(-1 * var(--s2));
+      top: 10%;
+      height: 80%;
+      width: 2px;
+      background: var(--accent);
+      border-radius: 1px;
+      z-index: 10;
+      pointer-events: none;
     }
 
     .list-drag-row { opacity: 0.4; }
-    .list-row-drop-before > td:first-child { border-top: 2px solid var(--accent) !important; }
+    .list-table tr.drop-line-before td { border-top: 2px solid var(--accent) !important; }
 
     /* ─────────────────────────────────────────────
        ERROR TOAST  (top-centre, click-to-dismiss)
@@ -1100,7 +1172,7 @@
   <!-- Kanban subheader (columns filter + search) -->
   <div id="subheader" x-show="currentView === 'kanban'">
     <span class="filter-label">Columns</span>
-    <div class="combobox-wrap" @click.outside="colCb.open = false">
+    <div class="combobox-wrap" @click.outside="colCb.open = false; colCb.search = ''">
       <button class="combobox-btn" type="button"
               @click="colCb.open = !colCb.open; $nextTick(() => colCb.open && $refs.colSearch && $refs.colSearch.focus())"
               :aria-expanded="colCb.open"
@@ -1148,7 +1220,7 @@
   <!-- List subheader (group by + search) -->
   <div id="list-subheader" x-show="currentView === 'list'">
     <span class="filter-label">Group by</span>
-    <div class="combobox-wrap" @click.outside="groupCb.open = false">
+    <div class="combobox-wrap" @click.outside="groupCb.open = false; groupCb.search = ''">
       <button class="combobox-btn" type="button"
               @click="groupCb.open = !groupCb.open; $nextTick(() => groupCb.open && $refs.groupSearch && $refs.groupSearch.focus())"
               :aria-expanded="groupCb.open"
@@ -1208,27 +1280,37 @@
            @mousedown="boardMouseDown($event)">
         <template x-for="col in columns" :key="col.tag">
           <div class="kanban-column" role="listitem"
-               :class="{ 'col-drag-over': colDropTarget === col.tag && colDragSource && colDragSource !== col.tag }"
+               :class="{ 'col-drop-line-before': colDropTarget === col.tag && colDragSource }"
                @dragover.prevent="colDragSource ? colHeaderDragOver($event, col.tag) : null"
+               @dragleave="colDragSource && colColumnDragLeave($event)"
                @drop.prevent="colDragSource ? colHeaderDrop($event, col.tag) : null">
 
             <!-- Column header -->
             <div class="kanban-column-header"
-                 :draggable="col.tag !== ''"
-                 @dragstart.stop="col.tag && colHeaderDragStart($event, col.tag)"
+                 :draggable="col.tag !== '' && col.tag !== '__untagged__'"
+                 @dragstart.stop="col.tag && col.tag !== '__untagged__' && colHeaderDragStart($event, col.tag)"
                  @dragend.stop="colHeaderDragEnd()">
               <span class="column-tag-name"
-                    x-text="col.tag || 'All Tasks'"
-                    :style="col.tag ? `--tag-hue: ${tagHue(col.tag)}` : ''"></span>
+                    x-text="col.tag === '__untagged__' ? 'Untagged' : (col.tag || 'All Tasks')"
+                    :style="col.tag && col.tag !== '__untagged__' ? `--tag-hue: ${tagHue(col.tag)}` : ''"></span>
               <span class="column-count" x-text="col.tasks.length" :aria-label="col.tasks.length + ' tasks'"></span>
+              <!-- Drag handle — shown on hover only for draggable (tagged) columns -->
+              <span class="column-drag-handle" x-show="col.tag !== '' && col.tag !== '__untagged__'" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                     fill="currentColor" aria-hidden="true">
+                  <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+                  <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                  <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+                </svg>
+              </span>
             </div>
 
             <!-- Drop zone + cards -->
             <div class="kanban-cards"
-                 @dragover.prevent="col.tag === '' ? flatBoardDragOver() : dragOver($event, col.tag)"
+                 @dragover.prevent="col.tag === '' ? flatBoardDragOver($event) : dragOver($event, col.tag)"
                  @dragleave.self="dragLeave($event)"
                  @drop.prevent="dropOnColumn($event, col.tag)"
-                 :class="{ dragover: col.tag !== '' && dropTarget === col.tag }"
+                 :class="{ dragover: col.tag !== '' && col.tag !== '__untagged__' && dropTarget === col.tag }"
                  :aria-label="col.tag + ' column drop zone'">
 
               <div class="column-empty" x-show="col.tasks.length === 0">
@@ -1243,14 +1325,23 @@
                      @dragover.prevent="flatCardDragOver($event, task, col.tag)"
                      @click.stop="openTask(task)"
                      :class="{
-                       dragging:     draggedTask && draggedTask.id === task.id,
-                       'drop-before': col.tag === '' && dropBeforeId === task.id
+                       dragging:          draggedTask && draggedTask.id === task.id,
+                       'drop-line-before': col.tag === '' && dropBeforeId === task.id
                      }"
                      role="button"
                      tabindex="0"
                      @keydown.enter.prevent="openTask(task)"
                      @keydown.space.prevent="openTask(task)"
                      :aria-label="'Open task: ' + displayTitle(task)">
+                  <!-- Drag handle — top-right corner, shown on hover -->
+                  <span class="task-card-drag-handle" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                         fill="currentColor" aria-hidden="true">
+                      <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+                      <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                      <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+                    </svg>
+                  </span>
                   <p class="task-card-title" x-text="displayTitle(task)"></p>
                   <p class="task-card-snippet" x-show="snippet(task)" x-text="snippet(task)"></p>
                   <div class="task-card-tags" aria-label="Tags">
@@ -1266,7 +1357,7 @@
             <!-- Add task to this column -->
             <button class="add-task-btn"
                     @click="addTaskToColumn(col.tag)"
-                    :aria-label="'Add task to ' + col.tag">
+                    :aria-label="'Add task to ' + (col.tag === '__untagged__' ? 'Untagged' : col.tag)">
               <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
                    fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
                    stroke-linejoin="round" aria-hidden="true">
@@ -1340,10 +1431,20 @@
                         @drop.prevent="listGroupBy === 'none' && listRowDrop()"
                         @dragend="listDraggedTask = null; listDropBeforeId = null"
                         :class="{
-                          'list-drag-row':        listDraggedTask && listDraggedTask.id === task.id,
-                          'list-row-drop-before': listDropBeforeId === task.id && listGroupBy === 'none'
+                          'list-drag-row':      listDraggedTask && listDraggedTask.id === task.id,
+                          'drop-line-before':   listDropBeforeId === task.id && listGroupBy === 'none'
                         }">
-                      <td class="list-title-cell" x-text="displayTitle(task)"></td>
+                      <td class="list-title-cell">
+                        <span x-show="listGroupBy === 'none'" class="list-drag-handle" aria-hidden="true">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                               fill="currentColor" aria-hidden="true">
+                            <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+                            <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                            <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+                          </svg>
+                        </span>
+                        <span x-text="displayTitle(task)"></span>
+                      </td>
                       <td class="list-snippet-cell" x-text="snippet(task)"></td>
                       <td class="list-tags-cell">
                         <template x-for="tag in task.tags" :key="tag">
@@ -1485,7 +1586,7 @@
       </div>
 
       <!-- Body text section -->
-      <div>
+      <div class="modal-body-section-grow">
         <p class="modal-section-label">Body</p>
         <textarea class="modal-body-textarea"
                   x-model="bodyText"
@@ -1507,9 +1608,6 @@
 
   </div><!-- /.modal -->
 
-  <!-- Toast / status live region -->
-  <div role="status" aria-live="polite" aria-atomic="true" class="sr-only" x-text="statusMsg"></div>
-
   <!-- Error toast (top-centre, click to dismiss) -->
   <div class="error-toast"
        x-show="errorMsg"
@@ -1530,9 +1628,9 @@ const STORAGE_KEY   = 'pk_db';
 const PREF_MARKER   = '---PREFERENCES---';
 const TASK_SEP      = '\n---\n';
 const TITLE_RE      = /#title\(([^)]*)\)/;
-const TAG_RE        = /(?<!\\)#([a-zA-Z][a-zA-Z0-9_-]*)/g;
+const TAG_RE        = /(?<!\\)#([a-zA-Z0-9][a-zA-Z0-9_-]*)/g;
 // A line is a "managed metadata line" if every non-empty token starts with #
-const MANAGED_LINE_RE = /^(\s*#[a-zA-Z][a-zA-Z0-9_-]*\s*)+$/;
+const MANAGED_LINE_RE = /^(\s*#[a-zA-Z0-9][a-zA-Z0-9_-]*\s*)+$/;
 const TITLE_LINE_RE   = /^#title\([^)]*\)$/;
 const AUTOSAVE_DELAY  = 400;   // ms debounce for UI edits
 const SNIPPET_WORDS   = 20;
@@ -1636,7 +1734,7 @@ function parseDatabase(text) {
 function escapeBody(text) {
   if (!text) return '';
   return text
-    .replace(/(?<!\\)#([a-zA-Z])/g, '\\#$1')
+    .replace(/(?<!\\)#([a-zA-Z0-9])/g, '\\#$1')
     .replace(/^---$/gm, '\\---');
 }
 
@@ -1773,7 +1871,6 @@ function kanbanApp() {
     tasks:          [],
     preferences:    {},
     rawText:        '',
-    statusMsg:      '',
 
     draggedTask:       null,
     dragSourceColumn:  null,
@@ -1868,10 +1965,18 @@ function kanbanApp() {
       const tags = tf === 'all' ? this.sortedAllTags
                  : Array.isArray(tf) ? tf
                  : [tf];
-      return tags.map(tag => ({
+      const cols = tags.map(tag => ({
         tag,
         tasks: this.kanbanTasks.filter(t => t.tags.includes(tag)),
       }));
+      // 'all' mode: append untagged column for tasks with no tags
+      if (tf === 'all') {
+        const untaggedTasks = this.visibleTasks.filter(t => t.tags.length === 0);
+        if (untaggedTasks.length) {
+          cols.push({ tag: '__untagged__', tasks: untaggedTasks });
+        }
+      }
+      return cols;
     },
 
     /* ── Computed: grouped task list ── */
@@ -1909,12 +2014,7 @@ function kanbanApp() {
       this.tasks       = tasks;
       this.preferences = preferences;
 
-      // Restore persisted UI state
-      this.theme       = preferences.theme       ?? 'auto';
-      this.tagFilter   = preferences.tagFilter   ?? 'all';
-      this.listGroupBy = preferences.listGroupBy ?? 'none';
-      this.tagOrder    = preferences.tagOrder    ?? [];
-
+      this._loadPreferences(preferences);
       this._applyTheme(this.theme);
 
       // Reactively reapply theme when it changes
@@ -1944,6 +2044,14 @@ function kanbanApp() {
       else                      document.documentElement.removeAttribute('data-theme');
     },
 
+    /** Restore UI state from a parsed preferences object. */
+    _loadPreferences(preferences) {
+      this.theme       = preferences.theme       ?? 'auto';
+      this.tagFilter   = preferences.tagFilter   ?? 'all';
+      this.listGroupBy = preferences.listGroupBy ?? 'none';
+      this.tagOrder    = preferences.tagOrder    ?? [];
+    },
+
     toggleTheme() {
       const cycle = { auto: 'light', light: 'dark', dark: 'auto' };
       this.theme = cycle[this.theme] ?? 'auto';
@@ -1963,7 +2071,7 @@ function kanbanApp() {
       if (task.title) return task.title;
       const words = task.raw
         .replace(/#title\([^)]*\)/g, '')
-        .replace(/#[a-zA-Z][a-zA-Z0-9_-]*/g, '')
+        .replace(/#[a-zA-Z0-9][a-zA-Z0-9_-]*/g, '') // strip tag tokens (matches TAG_RE)
         .trim()
         .split(/\s+/)
         .filter(Boolean);
@@ -2009,8 +2117,9 @@ function kanbanApp() {
       }
     },
     colSetSpecial(val) {
-      this.tagFilter = val;
-      this.colCb.open = false;
+      this.tagFilter  = val;
+      this.colCb.open   = false;
+      this.colCb.search = '';
     },
     colDisplayText() {
       const tf = this.tagFilter;
@@ -2045,8 +2154,9 @@ function kanbanApp() {
       }
     },
     groupSetSpecial(val) {
-      this.listGroupBy = val;
-      this.groupCb.open = false;
+      this.listGroupBy    = val;
+      this.groupCb.open   = false;
+      this.groupCb.search = '';
     },
     groupDisplayText() {
       const lg = this.listGroupBy;
@@ -2067,6 +2177,7 @@ function kanbanApp() {
     tagCbCommit() {
       const raw = this.tagCb.search.trim();
       if (!raw) return;
+      // addTag normalizes raw input (lowercase, strip invalid chars) before appending
       this.addTag(this.selectedTask, raw);
       this.tagCb.search = '';
     },
@@ -2085,25 +2196,16 @@ function kanbanApp() {
       this.rawText     = rawText;
       this.tasks       = tasks;
       this.preferences = preferences;
-      this.theme       = preferences.theme       ?? 'auto';
-      this.tagFilter   = preferences.tagFilter   ?? 'all';
-      this.listGroupBy = preferences.listGroupBy ?? 'none';
-      this.tagOrder    = preferences.tagOrder    ?? [];
+      this._loadPreferences(preferences);
       this._applyTheme(this.theme);
-      this.$nextTick(() => { this._externalUpdate = false; });
+      this._externalUpdate = false;
     },
 
     autosave() {
       clearTimeout(_autosaveTimer);
       _autosaveTimer = setTimeout(() => {
         this._saveDatabase();
-        this._toast('Saved');
       }, AUTOSAVE_DELAY);
-    },
-
-    _toast(msg) {
-      this.statusMsg = msg;
-      setTimeout(() => { this.statusMsg = ''; }, 2000);
     },
 
     /* ─────────────────────────────────────────────
@@ -2120,7 +2222,6 @@ function kanbanApp() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      this._toast('Exported');
     },
 
     importFile(event) {
@@ -2131,19 +2232,16 @@ function kanbanApp() {
         const text = e.target.result;
         if (typeof text !== 'string') return;
         const { tasks, preferences } = parseDatabase(text);
-        // Normalize: rebuild each task raw with escaping applied for data integrity
         tasks.forEach(task => {
           task.raw = buildTaskRaw(task.title, task.tags, extractBody(task.raw));
         });
         this.tasks       = tasks;
         this.preferences = preferences;
-        this.theme       = preferences.theme       ?? 'auto';
-        this.tagFilter   = preferences.tagFilter   ?? 'all';
-        this.listGroupBy = preferences.listGroupBy ?? 'none';
-        this.tagOrder    = preferences.tagOrder    ?? [];
+        this._loadPreferences(preferences);
+        const allParsedTags = [...new Set(tasks.flatMap(t => t.tags))];
+        this._syncTagOrder(allParsedTags);
         this._saveDatabase();
       };
-      reader.onerror = () => this._toast('Import failed — could not read file');
       reader.readAsText(file, 'utf-8');
       // Reset so same file can be re-imported
       event.target.value = '';
@@ -2155,21 +2253,17 @@ function kanbanApp() {
 
     saveRaw() {
       const { tasks, preferences } = parseDatabase(this.rawDraft);
-      // Normalize: rebuild each task raw with escaping applied for data integrity
       tasks.forEach(task => {
         task.raw = buildTaskRaw(task.title, task.tags, extractBody(task.raw));
       });
       this.tasks       = tasks;
       this.preferences = preferences;
-      // Restore UI state that may have changed in raw text
-      this.theme       = preferences.theme       ?? 'auto';
-      this.tagFilter   = preferences.tagFilter   ?? 'all';
-      this.listGroupBy = preferences.listGroupBy ?? 'none';
-      this.tagOrder    = preferences.tagOrder    ?? [];
+      this._loadPreferences(preferences);
+      const allParsedTags = [...new Set(tasks.flatMap(t => t.tags))];
+      this._syncTagOrder(allParsedTags);
       this._saveDatabase();
       this.rawDraft  = this.rawText;
       this.rawEdited = false;
-      this._toast('Saved');
     },
 
     discardRaw() {
@@ -2233,6 +2327,7 @@ function kanbanApp() {
       if (!task) return;
       const tag = rawInput.toLowerCase().replace(/[^a-z0-9_-]/g, '').trim();
       if (!tag || task.tags.includes(tag)) return;
+      this._syncTagOrder([tag]);
       this._applyTagUpdate(task, [...task.tags, tag]);
     },
 
@@ -2257,7 +2352,6 @@ function kanbanApp() {
       this.tagCb.open   = false;
       this.tasks = this.tasks.filter(t => t.id !== id);
       this._saveDatabase();
-      this._toast('Task deleted');
     },
 
     /** Basic focus trap: cycle Tab within the modal element. */
@@ -2292,6 +2386,7 @@ function kanbanApp() {
     },
 
     dragOver(event, targetTag) {
+      if (this.colDragSource !== null) return; // column drag in progress
       this.dropTarget = targetTag;
     },
 
@@ -2318,6 +2413,7 @@ function kanbanApp() {
 
       if (targetTag === '') {
         // Flat mode ("None" column): reorder tasks array
+        if (task.id == this.dropBeforeId) return;
         const newOrder = this.tasks.filter(t => t.id !== task.id);
         const beforeIdx = this.dropBeforeId !== null
           ? newOrder.findIndex(t => t.id === this.dropBeforeId)
@@ -2333,6 +2429,14 @@ function kanbanApp() {
 
       const sourceTag = this.dragSourceColumn;
       if (targetTag === sourceTag) { this.dragEnd(); return; }
+
+      // Untagged column: remove source tag, don't add any new tag
+      if (targetTag === '__untagged__') {
+        const newTags = task.tags.filter(t => t !== sourceTag);
+        this._applyTagUpdate(task, newTags);
+        this.dragEnd();
+        return;
+      }
 
       // Add target column tag (skip empty tags from "None" column)
       let newTags = task.tags.filter(t => t !== sourceTag);
@@ -2350,10 +2454,19 @@ function kanbanApp() {
       this.autosave();
     },
 
+    /** Append any candidateTags not yet in tagOrder (sorted). */
+    _syncTagOrder(candidateTags) {
+      const order = Array.isArray(this.tagOrder) ? this.tagOrder : [];
+      const added = candidateTags.filter(t => !order.includes(t)).sort();
+      if (!added.length) return;
+      this.tagOrder             = [...order, ...added];
+      this.preferences.tagOrder = this.tagOrder;
+    },
+
     addTaskToColumn(tag) {
       const newId = this.tasks.length ? Math.max(...this.tasks.map(t => t.id)) + 1 : 1;
-      // Empty tag means the "None" flat column — create task with no tags
-      const tags  = tag ? [tag] : [];
+      // Empty tag or untagged sentinel means no tags
+      const tags  = (tag && tag !== '__untagged__') ? [tag] : [];
       const raw   = buildTaskRaw(null, tags, 'New task');
       const task  = { id: newId, raw, title: null, tags };
       this.tasks.push(task);
@@ -2379,7 +2492,10 @@ function kanbanApp() {
     },
 
     /** Dragover on the kanban-cards area below all cards in flat column — clears dropBeforeId. */
-    flatBoardDragOver() {
+    flatBoardDragOver(event) {
+      if (this.colDragSource !== null) return; // column drag in progress
+      // Only clear when dragging over the empty area itself, not a child card
+      if (event && event.target !== event.currentTarget) return;
       this.dropBeforeId = null;
     },
 
@@ -2394,8 +2510,14 @@ function kanbanApp() {
     },
 
     colHeaderDragOver(event, tag) {
-      if (this.colDragSource && this.colDragSource !== tag) {
+      if (this.colDragSource == null) return;
+      const rect = event.currentTarget.getBoundingClientRect();
+      if (event.clientX < rect.left + rect.width / 2) {
         this.colDropTarget = tag;
+      } else {
+        const idx  = this.columns.findIndex(c => c.tag === tag);
+        const next = this.columns[idx + 1];
+        this.colDropTarget = next ? next.tag : tag;        
       }
     },
 
@@ -2422,13 +2544,20 @@ function kanbanApp() {
       this.colDropTarget = null;
     },
 
+    /** Clear column drop indicator when pointer truly leaves a column during column drag. */
+    colColumnDragLeave(event) {
+      if (!event.currentTarget.contains(event.relatedTarget)) {
+        this.colDropTarget = null;
+      }
+    },
+
     /* ─────────────────────────────────────────────
        KANBAN BOARD HORIZONTAL SCROLL (mouse-hold)
        ───────────────────────────────────────────── */
 
     boardMouseDown(event) {
-      // Do not intercept clicks on interactive elements
-      if (event.target.closest('.task-card, button, input, textarea, a, select')) return;
+      // Do not intercept clicks on interactive elements or draggable column headers
+      if (event.target.closest('.task-card, button, input, textarea, a, select, [draggable="true"]')) return;
       if (event.button !== 0) return;
 
       const board      = this.$refs.kanbanBoard;
@@ -2460,19 +2589,22 @@ function kanbanApp() {
     },
 
     listRowDragOver(event, task) {
+      if (this.listDraggedTask == null) return;
       const rect = event.currentTarget.getBoundingClientRect();
       if (event.clientY < rect.top + rect.height / 2) {
         this.listDropBeforeId = task.id;
       } else {
         const idx  = this.visibleTasks.findIndex(t => t.id === task.id);
         const next = this.visibleTasks[idx + 1];
-        this.listDropBeforeId = next ? next.id : null;
+        this.listDropBeforeId = next ? next.id : -1;
       }
     },
 
-    listRowDrop() {
+    listRowDrop() {      
+      if (this.listDropBeforeId === null) return;
       const task = this.listDraggedTask;
       if (!task) return;
+      if (task.id == this.listDropBeforeId) return;
       const newOrder  = this.tasks.filter(t => t.id !== task.id);
       const beforeIdx = this.listDropBeforeId !== null
         ? newOrder.findIndex(t => t.id === this.listDropBeforeId)
