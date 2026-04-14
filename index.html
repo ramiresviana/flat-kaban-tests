@@ -1989,6 +1989,12 @@ function kanbanApp() {
 
     errorMsg:       '',
 
+    // Auto-scroll state (drag)
+    _dragPointerX:   null,
+    _dragPointerY:   null,
+    _dragColEl:      null,
+    _stopAutoScroll: null,
+
     _externalUpdate: false,
 
     colCb:   { open: false, search: '' },
@@ -2143,6 +2149,9 @@ function kanbanApp() {
         if (e.key !== STORAGE_KEY || e.newValue === null) return;
         this._reloadFromStorage(e.newValue);
       });
+
+      // Track pointer position during any drag for auto-scroll
+      document.addEventListener('dragover', this._onDocDragOver.bind(this));
     },
 
     /* ── Theme helpers ── */
@@ -2493,12 +2502,71 @@ function kanbanApp() {
     },
 
     /* ─────────────────────────────────────────────
+       DRAG AUTO-SCROLL
+       ───────────────────────────────────────────── */
+
+    /** Called on every document dragover to track pointer position. */
+    _onDocDragOver(e) {
+      this._dragPointerX = e.clientX;
+      this._dragPointerY = e.clientY;
+    },
+
+    /**
+     * Start a rAF loop that scrolls the kanban board horizontally and the hovered column
+     * vertically when the pointer is near the edges during a drag.
+     * Returns a cancel function; store it in `this._stopAutoScroll`.
+     */
+    _startAutoScroll() {
+      const EDGE = 80;  // px from edge to start scrolling
+      const MAX  = 18;  // max px per frame
+      let rafId  = null;
+
+      const tick = () => {
+        const board = this.$refs.kanbanBoard;
+        const px    = this._dragPointerX;
+        const py    = this._dragPointerY;
+
+        if (board && px != null) {
+          const br = board.getBoundingClientRect();
+          if (px < br.left + EDGE && px >= br.left) {
+            const ratio = 1 - (px - br.left) / EDGE;
+            board.scrollLeft -= MAX * ratio;
+          } else if (px > br.right - EDGE && px <= br.right) {
+            const ratio = 1 - (br.right - px) / EDGE;
+            board.scrollLeft += MAX * ratio;
+          }
+        }
+
+        if (this._dragColEl && py != null) {
+          const cards = this._dragColEl.querySelector('.kanban-cards');
+          if (cards) {
+            const cr = cards.getBoundingClientRect();
+            if (py < cr.top + EDGE && py >= cr.top) {
+              const ratio = 1 - (py - cr.top) / EDGE;
+              cards.scrollTop -= MAX * ratio;
+            } else if (py > cr.bottom - EDGE && py <= cr.bottom) {
+              const ratio = 1 - (cr.bottom - py) / EDGE;
+              cards.scrollTop += MAX * ratio;
+            }
+          }
+        }
+
+        rafId = requestAnimationFrame(tick);
+      };
+
+      rafId = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(rafId);
+    },
+
+    /* ─────────────────────────────────────────────
        KANBAN DRAG-AND-DROP
        ───────────────────────────────────────────── */
 
     dragStart(event, task, sourceTag) {
       this.draggedTask      = task;
       this.dragSourceColumn = sourceTag;
+      this._dragColEl       = event.currentTarget.closest('.kanban-column');
+      this._stopAutoScroll  = this._startAutoScroll();
       event.dataTransfer.effectAllowed = 'move';
       // Store task id so drop works even if state updates during drag
       event.dataTransfer.setData('text/plain', String(task.id));
@@ -2506,7 +2574,9 @@ function kanbanApp() {
 
     dragOver(event, targetTag) {
       if (this.colDragSource !== null) return; // column drag in progress
-      this.dropTarget = targetTag;
+      this.dropTarget   = targetTag;
+      // Track current column element for vertical auto-scroll
+      this._dragColEl = event.currentTarget.closest('.kanban-column');
     },
 
     dragLeave(event) {
@@ -2514,6 +2584,9 @@ function kanbanApp() {
     },
 
     dragEnd() {
+      this._stopAutoScroll?.();
+      this._stopAutoScroll = null;
+      this._dragColEl      = null;
       this.draggedTask      = null;
       this.dragSourceColumn = null;
       this.dropTarget       = null;
@@ -2632,10 +2705,10 @@ function kanbanApp() {
        ───────────────────────────────────────────── */
 
     colHeaderDragStart(event, tag) {
-      this.colDragSource = tag;
-      // Precompute column index map to avoid re-evaluating the `columns` getter on every
-      // dragover frame (~60 Hz), which avoids UI lag during column dragging.
-      this._colIndexMap = Object.fromEntries(this.columns.map((c, i) => [c.tag, i]));
+      this.colDragSource    = tag;
+      this._dragColEl       = null; // no column scroll during column reorder
+      this._colIndexMap     = Object.fromEntries(this.columns.map((c, i) => [c.tag, i]));
+      this._stopAutoScroll  = this._startAutoScroll();
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', `col:${tag}`);
     },
@@ -2654,6 +2727,8 @@ function kanbanApp() {
     },
 
     colHeaderDrop(event, tag) {
+      this._stopAutoScroll?.();
+      this._stopAutoScroll = null;
       const src = this.colDragSource;
       this.colDragSource = null;
       this.colDropTarget = null;
@@ -2672,6 +2747,8 @@ function kanbanApp() {
     },
 
     colHeaderDragEnd() {
+      this._stopAutoScroll?.();
+      this._stopAutoScroll = null;
       this.colDragSource = null;
       this.colDropTarget = null;
     },
