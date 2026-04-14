@@ -847,7 +847,6 @@
       transition: background var(--ease), color var(--ease);
     }
 
-    .btn-danger:hover { background: var(--danger); color: #fff; }
     .btn-danger:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; }
     .btn-danger-confirm { background: var(--danger); color: #fff; }
 
@@ -1270,11 +1269,11 @@
 
     <!-- Kanban view -->
     <div class="view-panel kanban-panel" x-show="currentView === 'kanban'" role="tabpanel" aria-label="Kanban view">
-      <p class="placeholder-panel" x-show="columns.length === 0"
-         x-text="tasks.length === 0 ? 'No tasks yet.' : 'No tasks match the current filter.'"></p>
+      <p class="placeholder-panel" x-show="tasks.length === 0"
+         x-text="'No tasks yet.'"></p>
 
       <!-- Board: one column per tag -->
-      <div class="kanban-board" x-show="columns.length > 0" role="list"
+      <div class="kanban-board" x-show="tasks.length > 0 || tagFilter === 'all'" role="list"
            x-ref="kanbanBoard"
            :class="{ 'is-panning': boardPanning }"
            @mousedown="boardMouseDown($event)">
@@ -1881,6 +1880,7 @@ function kanbanApp() {
     colDropTarget:    null,
     tagOrder:         [],
     boardPanning:     false,
+    _colIndexMap:     {},
 
     listDraggedTask:  null,
     listDropBeforeId: null,
@@ -1969,12 +1969,9 @@ function kanbanApp() {
         tag,
         tasks: this.kanbanTasks.filter(t => t.tags.includes(tag)),
       }));
-      // 'all' mode: append untagged column for tasks with no tags
+      // 'all' mode: always append untagged column (even when empty)
       if (tf === 'all') {
-        const untaggedTasks = this.visibleTasks.filter(t => t.tags.length === 0);
-        if (untaggedTasks.length) {
-          cols.push({ tag: '__untagged__', tasks: untaggedTasks });
-        }
+        cols.push({ tag: '__untagged__', tasks: this.visibleTasks.filter(t => t.tags.length === 0) });
       }
       return cols;
     },
@@ -2069,13 +2066,7 @@ function kanbanApp() {
     /* ── Display helpers ── */
     displayTitle(task) {
       if (task.title) return task.title;
-      const words = task.raw
-        .replace(/#title\([^)]*\)/g, '')
-        .replace(/#[a-zA-Z0-9][a-zA-Z0-9_-]*/g, '') // strip tag tokens (matches TAG_RE)
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-      return words.slice(0, TITLE_FALLBACK_WORDS).join(' ') || '(empty task)';
+      return '(no title)';
     },
 
     snippet(task) {
@@ -2241,6 +2232,9 @@ function kanbanApp() {
         const allParsedTags = [...new Set(tasks.flatMap(t => t.tags))];
         this._syncTagOrder(allParsedTags);
         this._saveDatabase();
+        // Sync raw editor so the Raw view shows the freshly imported content
+        this.rawDraft  = this.rawText;
+        this.rawEdited = false;
       };
       reader.readAsText(file, 'utf-8');
       // Reset so same file can be re-imported
@@ -2505,6 +2499,9 @@ function kanbanApp() {
 
     colHeaderDragStart(event, tag) {
       this.colDragSource = tag;
+      // Precompute column index map to avoid re-evaluating the `columns` getter on every
+      // dragover frame (~60 Hz), which avoids UI lag during column dragging.
+      this._colIndexMap = Object.fromEntries(this.columns.map((c, i) => [c.tag, i]));
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', `col:${tag}`);
     },
@@ -2515,9 +2512,10 @@ function kanbanApp() {
       if (event.clientX < rect.left + rect.width / 2) {
         this.colDropTarget = tag;
       } else {
-        const idx  = this.columns.findIndex(c => c.tag === tag);
-        const next = this.columns[idx + 1];
-        this.colDropTarget = next ? next.tag : tag;        
+        const idx  = this._colIndexMap[tag] ?? -1;
+        const cols = this.columns;
+        const next = idx >= 0 ? cols[idx + 1] : null;
+        this.colDropTarget = next ? next.tag : tag;
       }
     },
 
