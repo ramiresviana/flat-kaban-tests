@@ -1070,6 +1070,18 @@
     .list-table tr.drop-line-before td { border-top: 2px solid var(--accent) !important; }
 
     /* ─────────────────────────────────────────────
+       CUSTOM SCROLLBARS
+       ───────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+    * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+    /* ─────────────────────────────────────────────
        ERROR TOAST  (top-centre, click-to-dismiss)
        ───────────────────────────────────────────── */
     .error-toast {
@@ -1276,7 +1288,9 @@
       <div class="kanban-board" x-show="tasks.length > 0 || tagFilter === 'all'" role="list"
            x-ref="kanbanBoard"
            :class="{ 'is-panning': boardPanning }"
-           @mousedown="boardMouseDown($event)">
+           @mousedown="boardMouseDown($event)"
+           @wheel.passive="false"
+           @wheel="boardWheelScroll($event)">
         <template x-for="col in columns" :key="col.tag">
           <div class="kanban-column" role="listitem"
                :class="{ 'col-drop-line-before': colDropTarget === col.tag && colDragSource }"
@@ -1459,6 +1473,18 @@
 
           </section>
         </template>
+
+        <!-- Add task button -->
+        <button class="add-task-btn" style="border-radius:var(--r2);border:1px solid var(--border)"
+                @click="addTaskToList()"
+                aria-label="Add new task">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          New task
+        </button>
 
       </div><!-- /list-view -->
     </div>
@@ -1926,9 +1952,21 @@ function kanbanApp() {
       });
     },
 
-    /* ── Computed: tasks filtered by searchQuery only ── */
+    /**
+     * Ordered tag list for column/group display: tagOrder entries first (even if empty),
+     * then task tags not yet in tagOrder. Used by columns getter and comboboxes.
+     */
+    get columnsTagList() {
+      const order = Array.isArray(this.tagOrder) ? this.tagOrder : [];
+      const taskTags = new Set(this.tasks.flatMap(t => t.tags));
+      const extra = [...taskTags].filter(t => !order.includes(t)).sort();
+      return [...order, ...extra];
+    },
+
+    /* ── Computed: tasks filtered by searchQuery only — newest first ── */
     get visibleTasks() {
-      let result = this.tasks;
+      // Reverse so newest-inserted tasks appear first
+      let result = [...this.tasks].reverse();
 
       if (this.searchQuery.trim()) {
         const q = this.searchQuery.toLowerCase();
@@ -1962,7 +2000,7 @@ function kanbanApp() {
           ? [{ tag: '', tasks: this.kanbanTasks }]
           : [];
       }
-      const tags = tf === 'all' ? this.sortedAllTags
+      const tags = tf === 'all' ? this.columnsTagList
                  : Array.isArray(tf) ? tf
                  : [tf];
       const cols = tags.map(tag => ({
@@ -1984,7 +2022,7 @@ function kanbanApp() {
       }
       if (lg === 'all') {
         const result = [];
-        for (const tag of this.sortedAllTags) {
+        for (const tag of this.columnsTagList) {
           const tasks = this.visibleTasks.filter(t => t.tags.includes(tag));
           if (tasks.length) result.push({ group: tag, tasks });
         }
@@ -2085,8 +2123,9 @@ function kanbanApp() {
 
     /* ── Combobox helpers: Columns filter ── */
     colFilteredTags() {
-      const s = this.colCb.search.toLowerCase();
-      return s ? this.allTags.filter(t => t.includes(s)) : this.allTags;
+      const s    = this.colCb.search.toLowerCase();
+      const base = this.columnsTagList;
+      return s ? base.filter(t => t.includes(s)) : base;
     },
     colIsSelected(tag) {
       const tf = this.tagFilter;
@@ -2122,8 +2161,9 @@ function kanbanApp() {
 
     /* ── Combobox helpers: Group by ── */
     groupFilteredTags() {
-      const s = this.groupCb.search.toLowerCase();
-      return s ? this.allTags.filter(t => t.includes(s)) : this.allTags;
+      const s    = this.groupCb.search.toLowerCase();
+      const base = this.columnsTagList;
+      return s ? base.filter(t => t.includes(s)) : base;
     },
     groupIsSelected(tag) {
       const lg = this.listGroupBy;
@@ -2461,8 +2501,17 @@ function kanbanApp() {
       const newId = this.tasks.length ? Math.max(...this.tasks.map(t => t.id)) + 1 : 1;
       // Empty tag or untagged sentinel means no tags
       const tags  = (tag && tag !== '__untagged__') ? [tag] : [];
-      const raw   = buildTaskRaw(null, tags, 'New task');
+      const raw   = buildTaskRaw(null, tags, '');
       const task  = { id: newId, raw, title: null, tags };
+      this.tasks.push(task);
+      this.autosave();
+      this.openTask(task);
+    },
+
+    addTaskToList() {
+      const newId = this.tasks.length ? Math.max(...this.tasks.map(t => t.id)) + 1 : 1;
+      const raw   = buildTaskRaw(null, [], '');
+      const task  = { id: newId, raw, title: null, tags: [] };
       this.tasks.push(task);
       this.autosave();
       this.openTask(task);
@@ -2550,7 +2599,7 @@ function kanbanApp() {
     },
 
     /* ─────────────────────────────────────────────
-       KANBAN BOARD HORIZONTAL SCROLL (mouse-hold)
+       KANBAN BOARD HORIZONTAL SCROLL (mouse-hold + wheel)
        ───────────────────────────────────────────── */
 
     boardMouseDown(event) {
@@ -2558,22 +2607,44 @@ function kanbanApp() {
       if (event.target.closest('.task-card, button, input, textarea, a, select, [draggable="true"]')) return;
       if (event.button !== 0) return;
 
-      const board      = this.$refs.kanbanBoard;
-      const startX     = event.pageX;
-      const startLeft  = board.scrollLeft;
+      const board     = this.$refs.kanbanBoard;
+      const startX    = event.pageX;
+      const startLeft = board.scrollLeft;
+      let lastX       = event.pageX;
+      let velocity    = 0;
       this.boardPanning = true;
 
       const onMove = (e) => {
+        velocity         = e.pageX - lastX;
+        lastX            = e.pageX;
         board.scrollLeft = startLeft - (e.pageX - startX);
       };
       const onUp = () => {
         this.boardPanning = false;
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup',   onUp);
+        // Inertia: keep scrolling with exponential decay after release
+        let v = -velocity;
+        const animate = () => {
+          if (Math.abs(v) < 0.5) return;
+          board.scrollLeft += v;
+          v *= 0.92;
+          requestAnimationFrame(animate);
+        };
+        requestAnimationFrame(animate);
       };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup',   onUp);
       event.preventDefault();
+    },
+
+    /** Translate vertical wheel events into horizontal board scroll. */
+    boardWheelScroll(event) {
+      if (event.deltaY === 0) return;
+      // If the pointer is over a vertically scrollable column, let it scroll normally
+      if (event.target.closest('.kanban-cards')) return;
+      event.preventDefault();
+      this.$refs.kanbanBoard.scrollLeft += event.deltaY;
     },
 
     /* ─────────────────────────────────────────────
