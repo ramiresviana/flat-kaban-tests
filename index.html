@@ -267,6 +267,36 @@
     .search-input::placeholder { color: var(--text-3); }
     .search-input:focus { outline: 2px solid var(--border-focus); outline-offset: 2px; border-color: transparent; }
 
+    /* Search suggestion dropdown */
+    .search-wrap { position: relative; flex: 1; max-width: 280px; }
+    .search-wrap .search-input { width: 100%; max-width: unset; }
+
+    .search-suggest-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      z-index: 60;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r2);
+      box-shadow: var(--shadow-md);
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .search-suggest-item {
+      display: flex;
+      align-items: center;
+      gap: var(--s2);
+      padding: var(--s2) var(--s3);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .search-suggest-item:hover { background: var(--surface-2); }
+
     /* ─── VIEW PANELS ─── */
     .view-panel {
       flex: 1;
@@ -1221,11 +1251,27 @@
       </div>
     </div>
 
-    <input class="search-input"
-           type="search"
-           placeholder="Search tasks…"
-           x-model="searchQuery"
-           aria-label="Search tasks" />
+    <div class="search-wrap" @click.outside="searchSuggestOpen = false">
+      <input class="search-input"
+             type="search"
+             placeholder="Search tasks…"
+             x-model="searchQuery"
+             @focus="searchSuggestOpen = true"
+             @keydown.escape="searchSuggestOpen = false"
+             aria-label="Search tasks"
+             aria-autocomplete="list"
+             :aria-expanded="searchSuggestOpen" />
+      <div class="search-suggest-dropdown"
+           x-show="searchSuggestOpen && searchSuggestions.length > 0">
+        <template x-for="tag in searchSuggestions" :key="tag">
+          <div class="search-suggest-item"
+               @mousedown.prevent="selectSearchSuggestion(tag)">
+            <span class="combobox-tag-dot" :style="`--tag-hue: ${tagHue(tag)}`"></span>
+            <span x-text="tag"></span>
+          </div>
+        </template>
+      </div>
+    </div>
   </div><!-- /subheader -->
 
   <!-- List subheader (group by + search) -->
@@ -1269,11 +1315,27 @@
       </div>
     </div>
 
-    <input class="search-input"
-           type="search"
-           placeholder="Search tasks…"
-           x-model="searchQuery"
-           aria-label="Search tasks" />
+    <div class="search-wrap" @click.outside="searchSuggestOpen = false">
+      <input class="search-input"
+             type="search"
+             placeholder="Search tasks…"
+             x-model="searchQuery"
+             @focus="searchSuggestOpen = true"
+             @keydown.escape="searchSuggestOpen = false"
+             aria-label="Search tasks"
+             aria-autocomplete="list"
+             :aria-expanded="searchSuggestOpen" />
+      <div class="search-suggest-dropdown"
+           x-show="searchSuggestOpen && searchSuggestions.length > 0">
+        <template x-for="tag in searchSuggestions" :key="tag">
+          <div class="search-suggest-item"
+               @mousedown.prevent="selectSearchSuggestion(tag)">
+            <span class="combobox-tag-dot" :style="`--tag-hue: ${tagHue(tag)}`"></span>
+            <span x-text="tag"></span>
+          </div>
+        </template>
+      </div>
+    </div>
   </div><!-- /list-subheader -->
 
   <!-- ── MAIN CONTENT ── -->
@@ -1333,6 +1395,7 @@
               <template x-for="task in col.tasks" :key="task.id + '-' + col.tag">
                 <div class="task-card"
                      draggable="true"
+                     :data-task-id="task.id"
                      @dragstart="dragStart($event, task, col.tag)"
                      @dragend="dragEnd()"
                      @dragover.prevent="flatCardDragOver($event, task, col.tag)"
@@ -1436,6 +1499,7 @@
                   <template x-for="task in group.tasks" :key="task.id">
                     <tr @click="openTask(task)"
                         tabindex="0"
+                        :data-task-id="task.id"
                         @keydown.enter.prevent="openTask(task)"
                         :aria-label="'Open task: ' + displayTitle(task)"
                         :draggable="listGroupBy === 'none'"
@@ -1892,7 +1956,8 @@ function kanbanApp() {
     currentView:    'kanban',
     theme:          'auto',
     tagFilter:      'all',
-    searchQuery:    '',
+    searchQuery:      '',
+    searchSuggestOpen: false,
     tasks:          [],
     preferences:    {},
     rawText:        '',
@@ -1961,6 +2026,14 @@ function kanbanApp() {
       const taskTags = new Set(this.tasks.flatMap(t => t.tags));
       const extra = [...taskTags].filter(t => !order.includes(t)).sort();
       return [...order, ...extra];
+    },
+
+    /** Tags matching the current searchQuery, in columnsTagList order. */
+    get searchSuggestions() {
+      const q = this.searchQuery.toLowerCase().trim();
+      const base = this.columnsTagList;
+      if (!q) return base;
+      return base.filter(t => t.includes(q));
     },
 
     /* ── Computed: tasks filtered by searchQuery only — newest first ── */
@@ -2119,6 +2192,18 @@ function kanbanApp() {
       let h = 0;
       for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) % 360;
       return Math.round(h / 30) * 30;
+    },
+
+    /** Select a tag suggestion: set search, close dropdown, scroll first matching task into view. */
+    selectSearchSuggestion(tag) {
+      this.searchQuery       = tag;
+      this.searchSuggestOpen = false;
+      this.$nextTick(() => {
+        const first = this.visibleTasks.find(t => t.tags.includes(tag));
+        if (!first) return;
+        const el = document.querySelector(`[data-task-id="${first.id}"]`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
     },
 
     /* ── Combobox helpers: Columns filter ── */
