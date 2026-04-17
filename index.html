@@ -326,9 +326,13 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100%;
       color: var(--text-3);
       font-size: 0.875rem;
+    }
+
+    /* Kanban view wants full-height placeholder; scope the full-height there only */
+    .view-panel.kanban-panel .placeholder-panel {
+      height: 100%;
     }
 
     /* ─────────────────────────────────────────────
@@ -633,6 +637,9 @@
       white-space: nowrap;
     }
 
+    /* Reserve left space in the first header column to match hidden row drag handle */
+    .list-table th:first-child { padding-left: calc(var(--s2) + 24px); }
+
     .list-table td {
       padding: var(--s2) var(--s4);
       font-size: 0.8125rem;
@@ -665,6 +672,26 @@
     }
 
     .list-tags-cell .tag-chip { margin-right: 3px; }
+
+    /* Add-task row inside list table — last row of each group */
+    .list-add-row td {
+      padding: var(--s2) var(--s4);
+      color: var(--text-3);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      border-bottom: none;
+    }
+    .list-add-row:hover td { background: var(--surface-2); color: var(--accent); }
+    .list-add-row td span { display: inline-flex; align-items: center; gap: var(--s2); }
+
+    /* Empty-state row inside list table */
+    .list-empty-row td {
+      padding: var(--s4) var(--s4);
+      color: var(--text-3);
+      font-size: 0.8125rem;
+      text-align: center;
+      border-bottom: none;
+    }
 
     /* ─────────────────────────────────────────────
        TASK DETAILS MODAL
@@ -1252,15 +1279,16 @@
     </div>
 
     <div class="search-wrap" @click.outside="searchSuggestOpen = false">
-      <input class="search-input"
-             type="search"
-             placeholder="Search tasks…"
-             x-model="searchQuery"
-             @focus="searchSuggestOpen = true"
-             @keydown.escape="searchSuggestOpen = false"
-             aria-label="Search tasks"
-             aria-autocomplete="list"
-             :aria-expanded="searchSuggestOpen" />
+            <input class="search-input"
+              type="search"
+              placeholder="Search tasks…"
+              x-ref="searchInput"
+              x-model="searchQuery"
+              @focus="searchSuggestOpen = true"
+              @keydown.escape="searchSuggestOpen = false"
+              aria-label="Search tasks"
+              aria-autocomplete="list"
+              :aria-expanded="searchSuggestOpen" />
       <div class="search-suggest-dropdown"
            x-show="searchSuggestOpen && searchSuggestions.length > 0">
         <template x-for="tag in searchSuggestions" :key="tag">
@@ -1355,6 +1383,7 @@
            @wheel="boardWheelScroll($event)">
         <template x-for="col in columns" :key="col.tag">
           <div class="kanban-column" role="listitem"
+               :data-column-tag="col.tag"
                :class="{ 'col-drop-line-before': colDropTarget === col.tag && colDragSource }"
                @dragover.prevent="colDragSource ? colHeaderDragOver($event, col.tag) : null"
                @dragleave="colDragSource && colColumnDragLeave($event)"
@@ -1365,9 +1394,14 @@
                  :draggable="col.tag !== '' && col.tag !== '__untagged__'"
                  @dragstart.stop="col.tag && col.tag !== '__untagged__' && colHeaderDragStart($event, col.tag)"
                  @dragend.stop="colHeaderDragEnd()">
-              <span class="column-tag-name"
-                    x-text="col.tag === '__untagged__' ? 'Untagged' : (col.tag || 'All Tasks')"
-                    :style="col.tag && col.tag !== '__untagged__' ? `--tag-hue: ${tagHue(col.tag)}` : ''"></span>
+                <!-- Column title: show only for tagged or untagged columns. Hide when tag is empty. -->
+                <span class="column-tag-name"
+                  x-show="col.tag === '__untagged__'"
+                  x-text="'Untagged'"></span>
+                <span class="column-tag-name"
+                  x-show="col.tag && col.tag !== '__untagged__'"
+                  :style="`--tag-hue: ${tagHue(col.tag)}`"
+                  x-text="col.tag"></span>
               <span class="column-count" x-text="col.tasks.length" :aria-label="col.tasks.length + ' tasks'"></span>
               <!-- Drag handle — shown on hover only for draggable (tagged) columns -->
               <span class="column-drag-handle" x-show="col.tag !== '' && col.tag !== '__untagged__'" aria-hidden="true">
@@ -1393,9 +1427,9 @@
               </div>
 
               <template x-for="task in col.tasks" :key="task.id + '-' + col.tag">
-                <div class="task-card"
-                     draggable="true"
-                     :data-task-id="task.id"
+                 <div class="task-card"
+                   :draggable="tagFilter !== 'none'"
+                   :data-task-id="task.id"
                      @dragstart="dragStart($event, task, col.tag)"
                      @dragend="dragEnd()"
                      @dragover.prevent="flatCardDragOver($event, task, col.tag)"
@@ -1418,7 +1452,7 @@
                       <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
                     </svg>
                   </span>
-                  <p class="task-card-title" x-text="displayTitle(task)"></p>
+                  <p class="task-card-title" x-show="task.title" x-text="task.title"></p>
                   <p class="task-card-snippet" x-show="snippet(task)" x-text="snippet(task)"></p>
                   <div class="task-card-tags" aria-label="Tags">
                     <template x-for="tag in task.tags" :key="tag">
@@ -1451,10 +1485,6 @@
     <div class="view-panel" x-show="currentView === 'list'" role="tabpanel" aria-label="List view">
       <div class="list-view">
 
-        <p class="placeholder-panel" x-show="visibleTasks.length === 0" style="padding:var(--s6)">
-          No tasks match the current filter.
-        </p>
-
         <!-- Groups -->
         <template x-for="group in groupedList" :key="group.group">
           <section class="list-section">
@@ -1462,9 +1492,8 @@
             <!-- Group header — only shown when actually grouping -->
             <div x-show="listGroupBy !== 'none'"
                  class="list-group-header"
-                 @click="toggleGroup(group.group)"
-                 :aria-expanded="!collapsedGroups.includes(group.group)"
                  role="button"
+                 :aria-expanded="!collapsedGroups.includes(group.group)"
                  tabindex="0"
                  @keydown.enter.prevent="toggleGroup(group.group)"
                  @keydown.space.prevent="toggleGroup(group.group)">
@@ -1482,7 +1511,14 @@
               <span class="group-tag-name"
                     x-text="group.group || 'Untagged'"
                     :style="group.group && group.group !== 'untagged' ? `--tag-hue: ${tagHue(group.group)}` : ''"></span>
-              <span class="group-count" x-text="group.tasks.length + ' task' + (group.tasks.length === 1 ? '' : 's')"></span>
+              <div style="margin-left:auto; display:flex; align-items:center; gap:var(--s2)">
+                <button class="icon-btn" type="button" @click.stop="addTaskToGroup(group.group)" aria-label="Add task to this group">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                </button>
+                <span class="group-count" x-text="group.tasks.length + ' task' + (group.tasks.length === 1 ? '' : 's')"></span>
+              </div>
             </div>
 
             <!-- Table -->
@@ -1502,17 +1538,17 @@
                         :data-task-id="task.id"
                         @keydown.enter.prevent="openTask(task)"
                         :aria-label="'Open task: ' + displayTitle(task)"
-                        draggable="true"
-                        @dragstart="listRowDragStart($event, task, group.group)"
+                          :draggable="listGroupBy !== 'none'"
+                          @dragstart="listRowDragStart($event, task, group.group)"
                         @dragover.prevent="listRowDragOver($event, task, group.group)"
                         @drop.prevent="listRowDrop(group.group)"
                         @dragend="listDraggedTask = null; listDropBeforeId = null; _listDragGroup = null"
                         :class="{
                           'list-drag-row':      listDraggedTask && listDraggedTask.id === task.id,
-                          'drop-line-before':   listDropBeforeId === task.id
+                          'drop-line-before':   listDropBeforeId === task.id && _listDragGroup === (group.group || '')
                         }">
                       <td class="list-title-cell">
-                        <span class="list-drag-handle" aria-hidden="true">
+                        <span class="list-drag-handle" aria-hidden="true" x-show="listGroupBy !== 'none'">
                           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
                                fill="currentColor" aria-hidden="true">
                             <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
@@ -1520,7 +1556,8 @@
                             <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
                           </svg>
                         </span>
-                        <span x-text="displayTitle(task)"></span>
+                        <span x-show="task.title" x-text="task.title"></span>
+                        <span x-show="!task.title" style="color: var(--text-3)">Untitled</span>
                       </td>
                       <td class="list-snippet-cell" x-text="snippet(task)"></td>
                       <td class="list-tags-cell">
@@ -1531,24 +1568,35 @@
                       </td>
                     </tr>
                   </template>
+
+                  <!-- Empty state row — shown when no tasks match the filter -->
+                  <tr class="list-empty-row" x-show="group.tasks.length === 0">
+                    <td colspan="3">No tasks match the current filter.</td>
+                  </tr>
+
+                  <!-- Add-task row — always last row in the group -->
+                  <tr class="list-add-row"
+                      @click="addTaskToGroup(group.group)"
+                      tabindex="0"
+                      @keydown.enter.prevent="addTaskToGroup(group.group)"
+                      aria-label="Add task to this group">
+                    <td colspan="3">
+                      <span>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+                             fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                             stroke-linejoin="round" aria-hidden="true">
+                          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        New task
+                      </span>
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
 
           </section>
         </template>
-
-        <!-- Add task button -->
-        <button class="add-task-btn" style="border-radius:var(--r2);border:1px solid var(--border)"
-                @click="addTaskToList()"
-                aria-label="Add new task">
-          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
-               fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-          New task
-        </button>
 
       </div><!-- /list-view -->
     </div>
@@ -1892,7 +1940,10 @@ function serializePreferences(prefs) {
  * appends preferences section. Blank blocks preserve task indices.
  */
 function serializeDatabase(tasks, preferences) {
-  const body = tasks.map(t => t.raw ?? '').join(TASK_SEP);
+  let body = tasks.map(t => t.raw ?? '').join(TASK_SEP);
+  // Collapse accidental blank lines between separators produced by soft-deleted blank blocks.
+  // Example: "...\n---\n\n---\n..." → "...\n---\n---\n..."
+  body = body.replace(/\n---\n\n(?=---\n)/g, '\n---\n');
   const prefSection = `\n${PREF_MARKER}\n${serializePreferences(preferences)}`;
   return body + prefSection;
 }
@@ -2093,11 +2144,21 @@ function kanbanApp() {
         tag,
         tasks: this._orderedTasksForTag(tag, this.kanbanTasks.filter(t => t.tags.includes(tag))),
       }));
-      // 'all' mode: always append untagged column (even when empty)
-      if (tf === 'all') {
-        const untagged = this.visibleTasks.filter(t => t.tags.length === 0);
+
+      // Decide whether to append the untagged column:
+      // - If there are no tasks at all, show an empty untagged column so users can add tasks.
+      // - Otherwise, show the untagged column only when there are untagged tasks and the
+      //   "All tags" selected-columns mode is NOT active (requirements: hide for All tags).
+      if (this.tasks.length === 0) {
+        cols.push({ tag: '__untagged__', tasks: [] });
+        return cols;
+      }
+
+      const untagged = this.visibleTasks.filter(t => t.tags.length === 0);
+      if (untagged.length && tf !== 'all') {
         cols.push({ tag: '__untagged__', tasks: this._orderedTasksForTag('__untagged__', untagged) });
       }
+
       return cols;
     },
 
@@ -2109,20 +2170,23 @@ function kanbanApp() {
       }
       if (lg === 'all') {
         const result = [];
+        const isSearching = Boolean(this.searchQuery && this.searchQuery.trim());
         for (const tag of this.columnsTagList) {
           const tasks = this._orderedTasksForTag(tag, this.visibleTasks.filter(t => t.tags.includes(tag)));
-          if (tasks.length) result.push({ group: tag, tasks });
+          // When searching, keep groups visible even if empty to preserve context.
+          if (isSearching || tasks.length) result.push({ group: tag, tasks });
         }
         const untagged = this._orderedTasksForTag('__untagged__', this.visibleTasks.filter(t => t.tags.length === 0));
-        if (untagged.length) result.push({ group: 'untagged', tasks: untagged });
+        if (isSearching || untagged.length) result.push({ group: 'untagged', tasks: untagged });
         return result;
       }
       const tags = Array.isArray(lg) ? lg : [lg];
       const tagSet = new Set(tags);
       const result = [];
+      const isSearching = Boolean(this.searchQuery && this.searchQuery.trim());
       for (const tag of tags) {
         const tasks = this._orderedTasksForTag(tag, this.visibleTasks.filter(t => t.tags.includes(tag)));
-        if (tasks.length) result.push({ group: tag, tasks });
+        if (isSearching || tasks.length) result.push({ group: tag, tasks });
       }
       const untagged = this._orderedTasksForTag('__untagged__', this.visibleTasks.filter(t => !t.tags.some(tag => tagSet.has(tag))));
       if (untagged.length) result.push({ group: 'untagged', tasks: untagged });
@@ -2217,6 +2281,14 @@ function kanbanApp() {
       this.searchQuery       = tag;
       this.searchSuggestOpen = false;
       this.$nextTick(() => {
+        // Ensure the search input loses focus after selecting a suggestion
+        try { if (this.$refs?.searchInput) this.$refs.searchInput.blur(); } catch (e) {}
+        // Prefer scrolling the kanban column into view (search suggestion refers to a tag)
+        try {
+          const colEl = document.querySelector(`.kanban-column[data-column-tag="${tag}"]`);
+          if (colEl) { colEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); return; }
+        } catch (e) {}
+        // Fallback: scroll to first task with the tag
         const first = this.visibleTasks.find(t => t.tags.includes(tag));
         if (!first) return;
         const el = document.querySelector(`[data-task-id="${first.id}"]`);
@@ -2302,11 +2374,13 @@ function kanbanApp() {
 
     /* ── Combobox helpers: Task detail tags ── */
     tagCbFilteredTags() {
+      // Follow user tag order preference when showing combobox options
       const s = this.tagCb.search.toLowerCase();
       const existing = this.selectedTask?.tags ?? [];
+      const base = this.sortedAllTags; // respects tagOrder preference
       return s
-        ? this.allTags.filter(t => t.includes(s) && !existing.includes(t))
-        : this.allTags.filter(t => !existing.includes(t));
+        ? base.filter(t => t.includes(s) && !existing.includes(t))
+        : base.filter(t => !existing.includes(t));
     },
     tagCbCommit() {
       const raw = this.tagCb.search.trim();
@@ -2319,6 +2393,18 @@ function kanbanApp() {
     /* ── Persistence ── */
     _saveDatabase() {
       if (this._externalUpdate) return;
+      // Ensure taskOrder is computed for all known tags before persisting
+      const allTags = this.columnsTagList;
+      const to = { ...(this.taskOrder || {}) };
+      allTags.forEach(tag => {
+        const tasksForTag = this.tasks.filter(t => t.tags.includes(tag));
+        to[tag] = this._orderedTasksForTag(tag, tasksForTag).map(t => t.id);
+      });
+      // Ungtagged tasks
+      const untaggedTasks = this.tasks.filter(t => !t.tags || t.tags.length === 0);
+      if (untaggedTasks.length) to['__untagged__'] = this._orderedTasksForTag('__untagged__', untaggedTasks).map(t => t.id);
+      this.taskOrder = to;
+      this.preferences.taskOrder = to;
       this.rawText = serializeDatabase(this.tasks, this.preferences);
       saveToStorage(this.rawText);
     },
@@ -2634,7 +2720,28 @@ function kanbanApp() {
       }
 
       const sourceTag = this.dragSourceColumn;
-      if (targetTag === sourceTag) { this.dragEnd(); return; }
+      if (targetTag === sourceTag) {
+        // Reordering within the same column: compute new order and apply if changed.
+        const col = this.columns.find(c => c.tag === targetTag);
+        if (col) {
+          const ordered = [...col.tasks];
+          const srcIdx = ordered.findIndex(t => t.id === task.id);
+          if (srcIdx !== -1) ordered.splice(srcIdx, 1);
+          const bi = ordered.findIndex(t => t.id === this.dropBeforeId);
+          if (this.dropBeforeId !== null && bi >= 0) ordered.splice(bi, 0, task);
+          else ordered.push(task);
+          // If order unchanged, do nothing
+          const origIds = (col.tasks || []).map(t => t.id);
+          const newIds = ordered.map(t => t.id);
+          const same = origIds.length === newIds.length && origIds.every((v,i) => v === newIds[i]);
+          if (!same) {
+            this._applyTaskOrder(targetTag, ordered);
+            this.autosave();
+          }
+        }
+        this.dragEnd();
+        return;
+      }
 
       // Untagged column: remove source tag, don't add any new tag
       if (targetTag === '__untagged__') {
@@ -2743,6 +2850,19 @@ function kanbanApp() {
       this.openTask(task);
     },
 
+    /** Add task inside a list-group (group.group values: tag string or 'untagged' or '') */
+    addTaskToGroup(groupKey) {
+      if (!groupKey) {
+        this.addTaskToList();
+        return;
+      }
+      if (groupKey === 'untagged') {
+        this.addTaskToColumn('__untagged__');
+        return;
+      }
+      this.addTaskToColumn(groupKey);
+    },
+
     /* ─────────────────────────────────────────────
        FLAT CARD DRAG (position in column)
        ───────────────────────────────────────────── */
@@ -2776,6 +2896,18 @@ function kanbanApp() {
       this.colDragSource    = tag;
       this._dragColEl       = null; // no column scroll during column reorder
       this._colIndexMap     = Object.fromEntries(this.columns.map((c, i) => [c.tag, i]));
+      // Precompute column header centers (measured once at drag start) to avoid
+      // frequent getBoundingClientRect calls on every dragover event.
+      try {
+        this._colCenters = {};
+        const headers = this.$refs.kanbanBoard ? this.$refs.kanbanBoard.querySelectorAll('.kanban-column-header') : [];
+        headers.forEach(h => {
+          const colEl = h.closest('.kanban-column');
+          const tagAttr = colEl ? colEl.getAttribute('data-column-tag') : '';
+          const r = h.getBoundingClientRect();
+          this._colCenters[tagAttr] = r.left + r.width / 2;
+        });
+      } catch (e) { this._colCenters = null; }
       this._stopAutoScroll  = this._startAutoScroll();
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', `col:${tag}`);
@@ -2783,14 +2915,25 @@ function kanbanApp() {
 
     colHeaderDragOver(event, tag) {
       if (this.colDragSource == null) return;
-      const rect = event.currentTarget.getBoundingClientRect();
-      if (event.clientX < rect.left + rect.width / 2) {
-        this.colDropTarget = tag;
+      // Use precomputed centers if available for better performance
+      const center = this._colCenters?.[tag] ?? null;
+      if (center !== null) {
+        if (event.clientX < center) this.colDropTarget = tag;
+        else {
+          const idx  = this._colIndexMap[tag] ?? -1;
+          const cols = this.columns;
+          const next = idx >= 0 ? cols[idx + 1] : null;
+          this.colDropTarget = next ? next.tag : tag;
+        }
       } else {
-        const idx  = this._colIndexMap[tag] ?? -1;
-        const cols = this.columns;
-        const next = idx >= 0 ? cols[idx + 1] : null;
-        this.colDropTarget = next ? next.tag : tag;
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < rect.left + rect.width / 2) this.colDropTarget = tag;
+        else {
+          const idx  = this._colIndexMap[tag] ?? -1;
+          const cols = this.columns;
+          const next = idx >= 0 ? cols[idx + 1] : null;
+          this.colDropTarget = next ? next.tag : tag;
+        }
       }
     },
 
@@ -2798,13 +2941,15 @@ function kanbanApp() {
       this._stopAutoScroll?.();
       this._stopAutoScroll = null;
       const src = this.colDragSource;
+      // Use the computed colDropTarget (if any) as the actual destination.
+      const dst = this.colDropTarget ?? tag;
       this.colDragSource = null;
       this.colDropTarget = null;
-      if (!src || src === tag) return;
+      if (!src || src === dst) return;
 
       const ordered = [...this.sortedAllTags];
       const srcIdx  = ordered.indexOf(src);
-      const dstIdx  = ordered.indexOf(tag);
+      const dstIdx  = ordered.indexOf(dst);
       if (srcIdx === -1 || dstIdx === -1) return;
 
       ordered.splice(srcIdx, 1);
@@ -2819,6 +2964,7 @@ function kanbanApp() {
       this._stopAutoScroll = null;
       this.colDragSource = null;
       this.colDropTarget = null;
+      this._colCenters = null;
     },
 
     /** Clear column drop indicator when pointer truly leaves a column during column drag. */
@@ -2836,6 +2982,14 @@ function kanbanApp() {
       // Do not intercept clicks on interactive elements or draggable column headers
       if (event.target.closest('.task-card, button, input, textarea, a, select, [draggable="true"]')) return;
       if (event.button !== 0) return;
+
+      // When interacting with the board, blur the global search input and close suggestions
+      try {
+        if (this.$refs?.searchInput) {
+          this.$refs.searchInput.blur();
+          this.searchSuggestOpen = false;
+        }
+      } catch (e) { /* defensive: ignore if refs unavailable */ }
 
       const board     = this.$refs.kanbanBoard;
       const startX    = event.pageX;
@@ -2913,6 +3067,7 @@ function kanbanApp() {
       const groupKey = group ?? '';
       const grp      = this.groupedList.find(g => (g.group || '') === groupKey);
       const ordered  = grp ? [...grp.tasks] : [...this.visibleTasks];
+      const originalIds = (grp ? grp.tasks : this.visibleTasks).map(t => t.id);
 
       const srcIdx = ordered.findIndex(t => t.id === task.id);
       if (srcIdx !== -1) ordered.splice(srcIdx, 1);
@@ -2921,6 +3076,16 @@ function kanbanApp() {
         : -1;
       if (beforeIdx >= 0) ordered.splice(beforeIdx, 0, task);
       else ordered.push(task);
+
+      const newIds = ordered.map(t => t.id);
+      // If ordering didn't actually change (self-drop), do nothing.
+      const same = originalIds.length === newIds.length && originalIds.every((v,i) => v === newIds[i]);
+      if (same) {
+        this.listDraggedTask  = null;
+        this.listDropBeforeId = null;
+        this._listDragGroup   = null;
+        return;
+      }
 
       // Map group key to taskOrder key
       const orderKey = groupKey === 'untagged' ? '__untagged__' : groupKey;
