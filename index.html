@@ -388,7 +388,7 @@
       font-weight: 600;
       font-size: 0.8125rem;
       text-transform: capitalize;
-      color: hsl(var(--tag-hue, 214), 60%, 40%);
+      color: hsl(var(--tag-hue, 100), 60%, 40%);
     }
 
     [data-theme="dark"] .column-tag-name {
@@ -422,12 +422,6 @@
       min-height: 80px;
       border-radius: 0 0 var(--r3) var(--r3);
       transition: background var(--ease);
-    }
-
-    .kanban-cards.dragover {
-      background: var(--accent-dim);
-      outline: 2px dashed var(--accent);
-      outline-offset: -4px;
     }
 
     /* Task card */
@@ -575,6 +569,7 @@
     .list-group-header:hover { background: var(--border); }
 
     .group-tag-name[style] {
+      text-transform: capitalize;
       color: hsl(var(--tag-hue, 214), 60%, 40%);
     }
 
@@ -641,7 +636,7 @@
        Body cell: padding-left(var(--s4)=16px) + drag handle SVG(18px) = 34px total. */
     /* Extra left padding on Title header to align with body cells that show the drag handle.
        Applied via Alpine class binding only when listGroupBy !== 'none'. */
-    .list-th-drag-offset { padding-left: calc(var(--s4) + 18px); }
+    .list-table th.list-th-drag-offset { padding-left: calc(var(--s4) + 18px); }
 
     .list-table td {
       padding: var(--s2) var(--s4);
@@ -686,6 +681,8 @@
     }
     .list-add-row:hover td { background: var(--surface-2); color: var(--accent); }
     .list-add-row td span { display: inline-flex; align-items: center; gap: var(--s2); }
+
+    .list-add-row.list-td-drag-offset td { padding-left: calc(var(--s4) + 18px); }
 
     /* Empty-state row inside list table */
     .list-empty-row td {
@@ -1262,10 +1259,6 @@
                  @keydown.escape.stop="colCb.open = false; colCb.search = ''" />
         </div>
         <div class="combobox-options">
-          <div class="combobox-option" @click="colSetSpecial('none')">
-            <span class="combobox-check" :class="{ shown: colIsSpecial('none') }">&#10003;</span>
-            None
-          </div>
           <div class="combobox-option" @click="colSetSpecial('all')">
             <span class="combobox-check" :class="{ shown: colIsSpecial('all') }">&#10003;</span>
             All tags
@@ -1402,10 +1395,11 @@
                   x-text="'All tasks'"></span>
                 <span class="column-tag-name"
                   x-show="col.tag === '__untagged__'"
+                  :style="{color: 'var(--text-2)'}"
                   x-text="'Untagged'"></span>
                 <span class="column-tag-name"
                   x-show="col.tag !== '' && col.tag !== '__untagged__'"
-                  :style="`--tag-hue: ${tagHue(col.tag)}`"
+                  :style="{'--tag-hue': tagHue(col.tag)}"
                   x-text="col.tag"></span>
               <span class="column-count" x-text="col.tasks.length" :aria-label="col.tasks.length + ' tasks'"></span>
               <!-- Drag handle — shown on hover only for draggable (tagged) columns -->
@@ -1421,10 +1415,9 @@
 
             <!-- Drop zone + cards -->
             <div class="kanban-cards"
-                 @dragover.prevent="col.tag === '' ? flatBoardDragOver($event) : dragOver($event, col.tag)"
-                 @dragleave.self="dragLeave($event)"
+                 @dragover.prevent="col.tag === '' ? flatBoardDragOver($event) : null"
                  @drop.prevent="dropOnColumn($event, col.tag)"
-                 :class="{ dragover: col.tag !== '' && col.tag !== '__untagged__' && dropTarget === col.tag }"
+                 @dragleave="dropBeforeId = null"
                  :aria-label="col.tag + ' column drop zone'">
 
               <div class="column-empty" x-show="col.tasks.length === 0">
@@ -1438,10 +1431,11 @@
                      @dragstart="dragStart($event, task, col.tag)"
                      @dragend="dragEnd()"
                      @dragover.prevent="cardDragOver($event, task, col.tag)"
+                     @dragleave.stop
                      @click.stop="openTask(task)"
                      :class="{
-                       dragging:          draggedTask && draggedTask.id === task.id,
-                       'drop-line-before': dropBeforeId === task.id
+                       dragging:           draggedTask && draggedTask.id === task.id,
+                       'drop-line-before': dropBeforeId === task.id && dropTargetColumn === col.tag
                      }"
                      role="button"
                      tabindex="0"
@@ -1493,7 +1487,9 @@
 
         <!-- Groups -->
         <template x-for="group in groupedList" :key="group.group">
-          <section class="list-section">
+          <section class="list-section"
+                   @dragover.prevent="listGroupBy !== 'none' && listDraggedTask ? (_listDropTargetGroup = (group.group || '')) : null"
+                   @drop.prevent="listGroupBy !== 'none' && listDraggedTask ? listRowDrop($event, group.group) : null">
 
             <!-- Group header — only shown when actually grouping -->
             <div x-show="listGroupBy !== 'none'"
@@ -1512,12 +1508,12 @@
                    stroke-linejoin="round" aria-hidden="true">
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
-              <span x-show="group.group && group.group !== 'untagged'"
-                    class="combobox-tag-dot"
-                    :style="`--tag-hue: ${tagHue(group.group)}`"></span>
-              <span class="group-tag-name"
-                    x-text="group.group || 'Untagged'"
-                    :style="group.group && group.group !== 'untagged' ? `--tag-hue: ${tagHue(group.group)}` : ''"></span>
+              <span x-show="group.group === 'untagged'"
+                  :style="{color: 'var(--text-2)'}"
+                  x-text="'Untagged'"></span>
+              <span class="group-tag-name" x-show="group.group !== 'untagged'"
+                    x-text="group.group"
+                    :style="{'--tag-hue': tagHue(group.group)}"></span>
               <span class="group-count" style="margin-left: auto" x-text="group.tasks.length + ' task' + (group.tasks.length === 1 ? '' : 's')"></span>
             </div>
 
@@ -1542,10 +1538,10 @@
                         @dragstart="listRowDragStart($event, task, group.group)"
                         @dragover="listRowDragOver($event, task, group.group)"
                         @drop="listRowDrop($event, group.group)"
-                        @dragend="listDraggedTask = null; listDropBeforeId = null; _listDragGroup = null; _listDropTargetGroup = null"
+                        @dragend="_resetListDragState()"
                         :class="{
-                          'list-drag-row':      listDraggedTask && listDraggedTask.id === task.id,
-                          'drop-line-before':   listDraggedTask && listDropBeforeId === task.id && _listDropTargetGroup === (group.group || '')
+                          'list-drag-row':    listDraggedTask && listDraggedTask.id === task.id,
+                          'drop-line-before': listDraggedTask && listDropBeforeId === task.id && _listDropTargetGroup === (group.group || '')
                         }">
                       <td class="list-title-cell">
                         <span class="list-drag-handle" aria-hidden="true" x-show="listGroupBy !== 'none'">
@@ -1576,6 +1572,7 @@
 
                   <!-- Add-task row — always last row in the group -->
                   <tr class="list-add-row"
+                      :class="{ 'list-td-drag-offset': listGroupBy !== 'none' }"
                       @click="addTaskToGroup(group.group)"
                       tabindex="0"
                       @keydown.enter.prevent="addTaskToGroup(group.group)"
@@ -1774,6 +1771,7 @@ const SNIPPET_WORDS         = 20;
 const TITLE_FALLBACK_WORDS  = 8;
 const AUTOSCROLL_EDGE_PX    = 80;  // px from edge to start scrolling
 const AUTOSCROLL_MAX_PX     = 18;  // max px scrolled per animation frame
+const DRAGOVER_THROTTLE_MS  = 16;  // ~60 fps cap for getBoundingClientRect reads
 
 /* ─────────────────────────────────────────────────
    PARSER  (text → model)
@@ -1805,7 +1803,7 @@ function parseTags(block) {
 
 /** Parse a single block of raw text into a Task object. */
 function parseTask(raw, id) {
-  if (raw === '') return null; // soft-deleted tombstone
+  if (raw === '') return { id, raw: '', title: null, tags: [] }; // tombstone
   const trimmed = raw.trim();
   return {
     id,
@@ -1848,21 +1846,29 @@ function parsePreferences(text) {
 /**
  * parseDatabase(text) → { tasks: Task[], preferences: Preferences }
  * Round-trip safe: tasks preserve their original `raw` strings.
+ * Tombstones (raw='') are preserved in the array to keep IDs stable.
  */
 function parseDatabase(text) {
   let mainText = text;
   let prefText = '';
 
-  const prefIdx = text.indexOf(PREF_MARKER);
+  const PREF_SEARCH = '\n' + PREF_MARKER;
+  const prefIdx = text.indexOf(PREF_SEARCH);
   if (prefIdx !== -1) {
     mainText = text.slice(0, prefIdx);
-    prefText = text.slice(prefIdx + PREF_MARKER.length);
+    prefText = text.slice(prefIdx + PREF_SEARCH.length);
+  } else {
+    // Fallback for legacy format (no leading \n before marker)
+    const legacyIdx = text.indexOf(PREF_MARKER);
+    if (legacyIdx !== -1) {
+      mainText = text.slice(0, legacyIdx);
+      prefText = text.slice(legacyIdx + PREF_MARKER.length);
+    }
   }
 
   const tasks = mainText
     .split(TASK_SEP)
-    .map((block, i) => parseTask(block, i + 1))
-    .filter(Boolean);
+    .map((block, i) => parseTask(block, i + 1));
 
   return { tasks, preferences: parsePreferences(prefText) };
 }
@@ -2025,6 +2031,7 @@ function kanbanApp() {
     dragSourceColumn:  null,
     dropTarget:        null,
     dropBeforeId:      null,
+    dropTargetColumn:  null,
 
     colDragSource:    null,
     colDropTarget:    null,
@@ -2036,6 +2043,8 @@ function kanbanApp() {
     listDraggedTask:  null,
     listDropBeforeId: null,
     _listDropTargetGroup: null,
+    _cardDragOverTime:  0,
+    _listDragOverTime:  0,
 
     listGroupBy:    'none',
     collapsedGroups: [],
@@ -2062,34 +2071,14 @@ function kanbanApp() {
     groupCb: { open: false, search: '' },
     tagCb:   { open: false, search: '' },
 
-    /* ── Computed: all unique tags (alphabetical) ── */
-    get allTags() {
-      const set = new Set();
-      this.tasks.forEach(t => t.tags.forEach(tag => set.add(tag)));
-      return [...set].sort();
-    },
-
-    /* ── Computed: tags sorted by tagOrder preference ── */
-    get sortedAllTags() {
-      const order = Array.isArray(this.tagOrder) ? this.tagOrder : [];
-      const all = [...this.allTags];
-      if (!order.length) return all;
-      return all.sort((a, b) => {
-        const ia = order.indexOf(a);
-        const ib = order.indexOf(b);
-        if (ia >= 0 && ib >= 0) return ia - ib;
-        if (ia >= 0) return -1;
-        if (ib >= 0) return 1;
-        return a.localeCompare(b);
-      });
-    },
-
     /**
      * Ordered tag list for column/group display: tagOrder entries first (even if empty),
      * then task tags not yet in tagOrder. Used by columns getter and comboboxes.
+     * __untagged__ sentinel is always excluded — it is never a real tag column.
      */
     get columnsTagList() {
-      const order = Array.isArray(this.tagOrder) ? this.tagOrder : [];
+      const order = (Array.isArray(this.tagOrder) ? this.tagOrder : [])
+        .filter(t => t !== '__untagged__');
       const taskTags = new Set(this.tasks.flatMap(t => t.tags));
       const extra = [...taskTags].filter(t => !order.includes(t)).sort();
       return [...order, ...extra];
@@ -2105,17 +2094,22 @@ function kanbanApp() {
 
     /* ── Computed: tasks filtered by searchQuery only — newest first ── */
     get visibleTasks() {
-      // Reverse so newest-inserted tasks appear first; exclude soft-deleted blank tasks
-      let result = [...this.tasks].reverse().filter(t => t.raw !== '');
+      return this._applySearchFilter([...this.tasks].reverse().filter(t => t.raw !== ''));
+    },
 
-      if (this.searchQuery.trim()) {
-        const q = this.searchQuery.toLowerCase();
-        result = result.filter(t =>
-          t.raw.toLowerCase().includes(q) ||
-          (t.title && t.title.toLowerCase().includes(q))
-        );
-      }
-      return result;
+    /* ── Computed: live tasks in insertion order (oldest first) for list/none mode ── */
+    get visibleTasksAsc() {
+      return this._applySearchFilter(this.tasks.filter(t => t.raw !== ''));
+    },
+
+    /** Filter tasks by the current searchQuery. Returns the input array filtered in-place. */
+    _applySearchFilter(tasks) {
+      if (!this.searchQuery.trim()) return tasks;
+      const q = this.searchQuery.toLowerCase();
+      return tasks.filter(t =>
+        t.raw.toLowerCase().includes(q) ||
+        (t.title && t.title.toLowerCase().includes(q))
+      );
     },
 
     /* ── Computed: tasks filtered for kanban view (tagFilter + search) ── */
@@ -2163,31 +2157,32 @@ function kanbanApp() {
     /* ── Computed: grouped task list ── */
     get groupedList() {
       const lg = this.listGroupBy;
+      const hasLiveTasks = this.tasks.some(t => t.raw !== '');
+
       if (lg === 'none') {
-        return [{ group: '', tasks: this._orderedTasksForTag('', this.visibleTasks) }];
+        return [{ group: '', tasks: this.visibleTasksAsc }];
       }
       if (lg === 'all') {
         const result = [];
         const isSearching = Boolean(this.searchQuery && this.searchQuery.trim());
         for (const tag of this.columnsTagList) {
           const tasks = this._orderedTasksForTag(tag, this.visibleTasks.filter(t => t.tags.includes(tag)));
-          // When searching, keep groups visible even if empty to preserve context.
           if (isSearching || tasks.length) result.push({ group: tag, tasks });
         }
         const untagged = this._orderedTasksForTag('__untagged__', this.visibleTasks.filter(t => t.tags.length === 0));
-        if (isSearching || untagged.length) result.push({ group: 'untagged', tasks: untagged });
+        if (isSearching || untagged.length || !hasLiveTasks) result.push({ group: 'untagged', tasks: untagged });
         return result;
       }
       const tags = Array.isArray(lg) ? lg : [lg];
-      const tagSet = new Set(tags);
       const result = [];
       const isSearching = Boolean(this.searchQuery && this.searchQuery.trim());
       for (const tag of tags) {
         const tasks = this._orderedTasksForTag(tag, this.visibleTasks.filter(t => t.tags.includes(tag)));
         if (isSearching || tasks.length) result.push({ group: tag, tasks });
       }
-      const untagged = this._orderedTasksForTag('__untagged__', this.visibleTasks.filter(t => !t.tags.some(tag => tagSet.has(tag))));
-      if (isSearching || untagged.length) result.push({ group: 'untagged', tasks: untagged });
+      // Untagged group: only tasks with NO tags at all (not merely lacking the selected tags)
+      const untagged = this._orderedTasksForTag('__untagged__', this.visibleTasks.filter(t => t.tags.length === 0));
+      if (isSearching || untagged.length || !hasLiveTasks) result.push({ group: 'untagged', tasks: untagged });
       return result;
     },
 
@@ -2234,9 +2229,10 @@ function kanbanApp() {
     /** Restore UI state from a parsed preferences object. */
     _loadPreferences(preferences) {
       this.theme       = preferences.theme       ?? 'auto';
-      this.tagFilter   = preferences.tagFilter   ?? 'all';
+      const storedTf   = preferences.tagFilter   ?? 'all';
+      this.tagFilter   = storedTf === 'none' ? 'all' : storedTf;
       this.listGroupBy = preferences.listGroupBy ?? 'none';
-      this.tagOrder    = preferences.tagOrder    ?? [];
+      this.tagOrder    = (preferences.tagOrder   ?? []).filter(t => t !== '__untagged__');
       this.taskOrder   = preferences.taskOrder   ?? {};
     },
 
@@ -2310,9 +2306,9 @@ function kanbanApp() {
       const tf = this.tagFilter;
       if (Array.isArray(tf)) {
         const next = tf.includes(tag) ? tf.filter(t => t !== tag) : [...tf, tag];
-        this.tagFilter = next.length === 0 ? 'none' : next;
+        this.tagFilter = next.length === 0 ? 'all' : next;
       } else if (tf === tag) {
-        this.tagFilter = 'none';
+        this.tagFilter = 'all';
       } else {
         this.tagFilter = [tag];
       }
@@ -2400,10 +2396,10 @@ function kanbanApp() {
     _computeTaskOrder() {
       const to = { ...(this.taskOrder || {}) };
       for (const tag of this.columnsTagList) {
-        const taggedTasks = this.tasks.filter(t => t.tags.includes(tag));
+        const taggedTasks = this.tasks.filter(t => t.raw !== '' && t.tags.includes(tag));
         to[tag] = this._orderedTasksForTag(tag, taggedTasks).map(t => t.id);
       }
-      const untaggedTasks = this.tasks.filter(t => !t.tags || t.tags.length === 0);
+      const untaggedTasks = this.tasks.filter(t => t.raw !== '' && (!t.tags || t.tags.length === 0));
       if (untaggedTasks.length) {
         to['__untagged__'] = this._orderedTasksForTag('__untagged__', untaggedTasks).map(t => t.id);
       }
@@ -2671,27 +2667,31 @@ function kanbanApp() {
       event.dataTransfer.effectAllowed = 'move';
       // Store task id so drop works even if state updates during drag
       event.dataTransfer.setData('text/plain', String(task.id));
-    },
-
-    dragOver(event, targetTag) {
-      if (this.colDragSource !== null) return;
-      if (this.dropTarget !== targetTag) this.dropTarget = targetTag;
-      const colEl = event.currentTarget.closest('.kanban-column');
-      if (this._dragColEl !== colEl) this._dragColEl = colEl;
-    },
-
-    dragLeave(event) {
-      if (this.dropTarget !== null) this.dropTarget = null;
+      this._cachedColumns = this.columns;
     },
 
     dragEnd() {
       this._stopAutoScroll?.();
       this._stopAutoScroll = null;
-      this._dragColEl      = null;
+      this._dragColEl       = null;
+      this._resetKanbanDragState();
+    },
+
+    _resetKanbanDragState() {
       this.draggedTask      = null;
       this.dragSourceColumn = null;
       this.dropTarget       = null;
       this.dropBeforeId     = null;
+      this.dropTargetColumn = null;
+      this._cachedColumns   = null;
+    },
+
+    _resetListDragState() {
+      this.listDraggedTask      = null;
+      this.listDropBeforeId     = null;
+      this._listDragGroup       = null;
+      this._listDropTargetGroup = null;
+      this._cachedGroupList   = null;
     },
 
     dropOnColumn(event, targetTag) {
@@ -2716,14 +2716,7 @@ function kanbanApp() {
 
     _dropFlatReorder(task) {
       const col     = this.columns.find(c => c.tag === '');
-      const ordered = col ? [...col.tasks] : [];
-      const srcIdx  = ordered.findIndex(t => t.id === task.id);
-      if (srcIdx !== -1) ordered.splice(srcIdx, 1);
-      const beforeIdx = this.dropBeforeId !== null
-        ? ordered.findIndex(t => t.id === this.dropBeforeId)
-        : -1;
-      if (beforeIdx >= 0) ordered.splice(beforeIdx, 0, task);
-      else ordered.push(task);
+      const ordered = this._reorderTasks(task, col ? col.tasks : [], this.dropBeforeId);
       this._applyTaskOrder('', ordered);
       this.dropBeforeId = null;
       this.autosave();
@@ -2732,14 +2725,9 @@ function kanbanApp() {
     _dropSameColumn(task, tag) {
       const col = this.columns.find(c => c.tag === tag);
       if (!col) return;
-      const ordered = [...col.tasks];
-      const srcIdx  = ordered.findIndex(t => t.id === task.id);
-      if (srcIdx !== -1) ordered.splice(srcIdx, 1);
-      const bi = ordered.findIndex(t => t.id === this.dropBeforeId);
-      if (this.dropBeforeId !== null && bi >= 0) ordered.splice(bi, 0, task);
-      else ordered.push(task);
-      const origIds   = col.tasks.map(t => t.id);
-      const newIds    = ordered.map(t => t.id);
+      const ordered  = this._reorderTasks(task, col.tasks, this.dropBeforeId);
+      const origIds  = col.tasks.map(t => t.id);
+      const newIds   = ordered.map(t => t.id);
       const unchanged = origIds.length === newIds.length && origIds.every((v, i) => v === newIds[i]);
       if (!unchanged) { this._applyTaskOrder(tag, ordered); this.autosave(); }
     },
@@ -2749,11 +2737,7 @@ function kanbanApp() {
       this._applyTagUpdate(task, newTags);
       if (this.dropBeforeId === null) return;
       const col     = this.columns.find(c => c.tag === '__untagged__');
-      const ordered = col ? [...col.tasks] : [];
-      const s  = ordered.findIndex(t => t.id === task.id);
-      if (s !== -1) ordered.splice(s, 1);
-      const bi = ordered.findIndex(t => t.id === this.dropBeforeId);
-      if (bi >= 0) ordered.splice(bi, 0, task); else ordered.push(task);
+      const ordered = this._reorderTasks(task, col ? col.tasks : [], this.dropBeforeId);
       this._applyTaskOrder('__untagged__', ordered);
     },
 
@@ -2766,11 +2750,7 @@ function kanbanApp() {
         const col = this.columns.find(c => c.tag === targetTag);
         if (!col) return;
         if (dropBeforeId !== null) {
-          const ordered = [...col.tasks];
-          const s  = ordered.findIndex(t => t.id === task.id);
-          if (s !== -1) ordered.splice(s, 1);
-          const bi = ordered.findIndex(t => t.id === dropBeforeId);
-          if (bi >= 0) ordered.splice(bi, 0, task); else ordered.push(task);
+          const ordered = this._reorderTasks(task, col.tasks, dropBeforeId);
           this._applyTaskOrder(targetTag, ordered);
         } else {
           this._applyTaskOrder(targetTag, col.tasks);
@@ -2780,10 +2760,24 @@ function kanbanApp() {
 
     /** Central helper that rebuilds a task's raw block after a tag/title change. */
     _applyTagUpdate(task, newTags) {
-      const body    = extractBody(task.raw);
-      task.raw      = buildTaskRaw(task.title, newTags, body);
-      task.tags     = newTags;
+      const body = extractBody(task.raw);
+      task.raw   = buildTaskRaw(task.title, newTags, body);
+      task.tags  = newTags;
       this.autosave();
+    },
+
+    /**
+     * Reorder `task` in `orderedTasks` so it appears before `dropBeforeId`.
+     * Returns the new ordered array; does NOT call _applyTaskOrder.
+     */
+    _reorderTasks(task, orderedTasks, dropBeforeId) {
+      const list   = [...orderedTasks];
+      const srcIdx = list.findIndex(t => t.id === task.id);
+      if (srcIdx !== -1) list.splice(srcIdx, 1);
+      const beforeIdx = dropBeforeId !== null ? list.findIndex(t => t.id === dropBeforeId) : -1;
+      if (beforeIdx >= 0) list.splice(beforeIdx, 0, task);
+      else list.push(task);
+      return list;
     },
 
     /**
@@ -2851,12 +2845,19 @@ function kanbanApp() {
     /** Per-card dragover for any column — computes dropBeforeId using half-height heuristic. */
     cardDragOver(event, task, colTag) {
       if (this.colDragSource !== null) return;
+      const now = Date.now();
+      if (now - this._cardDragOverTime < DRAGOVER_THROTTLE_MS) return;
+      this._cardDragOverTime = now;
+      if (this.dropTargetColumn !== colTag) this.dropTargetColumn = colTag;
+      // Track the column element for auto-scroll
+      const colEl = event.currentTarget.closest('.kanban-column');
+      if (this._dragColEl !== colEl) this._dragColEl = colEl;
       const rect = event.currentTarget.getBoundingClientRect();
       let newDropBeforeId;
       if (event.clientY < rect.top + rect.height / 2) {
         newDropBeforeId = task.id;
       } else {
-        const col   = this.columns.find(c => c.tag === colTag);
+        const col   = this._cachedColumns.find(c => c.tag === colTag);
         const tasks = col ? col.tasks : this.visibleTasks;
         const idx   = tasks.findIndex(t => t.id === task.id);
         const next  = tasks[idx + 1];
@@ -2870,6 +2871,7 @@ function kanbanApp() {
       if (this.colDragSource !== null) return;
       if (event && event.target !== event.currentTarget) return;
       if (this.dropBeforeId !== null) this.dropBeforeId = null;
+      if (this.dropTargetColumn !== null) this.dropTargetColumn = null;
     },
 
     /* ─────────────────────────────────────────────
@@ -2880,6 +2882,7 @@ function kanbanApp() {
       this.colDragSource    = tag;
       this._dragColEl       = null; // no column scroll during column reorder
       this._colIndexMap     = Object.fromEntries(this.columns.map((c, i) => [c.tag, i]));
+      this._cachedColumns = this.columns;
       // Precompute column header centers (measured once at drag start) to avoid
       // frequent getBoundingClientRect calls on every dragover event.
       try {
@@ -2907,7 +2910,7 @@ function kanbanApp() {
           newTarget = tag;
         } else {
           const idx  = this._colIndexMap[tag] ?? -1;
-          const next = idx >= 0 ? this.columns[idx + 1] : null;
+          const next = idx >= 0 ? this._cachedColumns[idx + 1] : null;
           newTarget = next ? next.tag : tag;
         }
       } else {
@@ -2916,7 +2919,7 @@ function kanbanApp() {
           newTarget = tag;
         } else {
           const idx  = this._colIndexMap[tag] ?? -1;
-          const next = idx >= 0 ? this.columns[idx + 1] : null;
+          const next = idx >= 0 ? this._cachedColumns[idx + 1] : null;
           newTarget = next ? next.tag : tag;
         }
       }
@@ -2934,7 +2937,7 @@ function kanbanApp() {
       this.colDropTarget = null;
       if (!src || src === dst) return;
 
-      const ordered = [...this.sortedAllTags];
+      const ordered = [...this.columnsTagList];
       const srcIdx  = ordered.indexOf(src);
       if (srcIdx === -1) return;
 
@@ -2954,6 +2957,7 @@ function kanbanApp() {
       this.colDragSource = null;
       this.colDropTarget = null;
       this._colCenters = null;
+      this._cachedColumns = null;
     },
 
     /** Clear column drop indicator when pointer truly leaves a column during column drag. */
@@ -3030,13 +3034,15 @@ function kanbanApp() {
       this._listDragGroup   = group ?? '';
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', String(task.id));
+      this._cachedGroupList = this.groupedList;
     },
 
     listRowDragOver(event, task, group) {
       if (this.listGroupBy === 'none') return;
       if (this.listDraggedTask == null) return;
-      // Only allow reorder within the same group
-      if ((group ?? '') !== (this._listDragGroup ?? '')) return;
+      const now = Date.now();
+      if (now - this._listDragOverTime < DRAGOVER_THROTTLE_MS) return;
+      this._listDragOverTime = now;
       event.preventDefault();
       const newGroup = group ?? '';
       if (this._listDropTargetGroup !== newGroup) this._listDropTargetGroup = newGroup;
@@ -3046,7 +3052,7 @@ function kanbanApp() {
       if (isAboveMiddle) {
         newDropBeforeId = task.id;
       } else {
-        const grp  = this.groupedList.find(g => (g.group || '') === (group || ''));
+        const grp  = this._cachedGroupList.find(g => (g.group || '') === (group || ''));
         const list = grp ? grp.tasks : this.visibleTasks;
         const idx  = list.findIndex(t => t.id === task.id);
         const next = list[idx + 1];
@@ -3057,52 +3063,82 @@ function kanbanApp() {
 
     listRowDrop(event, group) {
       if (this.listGroupBy === 'none') return;
-      if (this.listDropBeforeId === null) return;
+      if (this.listDraggedTask == null) return;
       event.preventDefault();
       const task = this.listDraggedTask;
-      if (!task) return;
+      const targetGroup = group ?? '';
+      const sourceGroup = this._listDragGroup ?? '';
+      const isCrossGroup = sourceGroup !== targetGroup;
+
+      if (isCrossGroup) {
+        this._listCrossGroupDrop(task, sourceGroup, targetGroup);
+        return;
+      }
+
+      if (this.listDropBeforeId === null) {
+        this._resetListDragState();
+        return;
+      }
 
       // Dropping a task onto itself is a no-op
       if (this.listDropBeforeId === task.id) {
-        this.listDraggedTask      = null;
-        this.listDropBeforeId     = null;
-        this._listDragGroup       = null;
-        this._listDropTargetGroup = null;
+        this._resetListDragState();
         return;
       }
 
-      const groupKey = group ?? '';
-      const grp      = this.groupedList.find(g => (g.group || '') === groupKey);
-      const ordered  = grp ? [...grp.tasks] : [...this.visibleTasks];
-      const originalIds = (grp ? grp.tasks : this.visibleTasks).map(t => t.id);
-
-      const srcIdx = ordered.findIndex(t => t.id === task.id);
-      if (srcIdx !== -1) ordered.splice(srcIdx, 1);
-      const beforeIdx = this.listDropBeforeId !== null && this.listDropBeforeId !== -1
-        ? ordered.findIndex(t => t.id === this.listDropBeforeId)
-        : -1;
-      if (beforeIdx >= 0) ordered.splice(beforeIdx, 0, task);
-      else ordered.push(task);
+      const grp         = this.groupedList.find(g => (g.group || '') === targetGroup);
+      const baseTasks   = grp ? grp.tasks : this.visibleTasks;
+      const originalIds = baseTasks.map(t => t.id);
+      const dropId      = this.listDropBeforeId !== -1 ? this.listDropBeforeId : null;
+      const ordered     = this._reorderTasks(task, baseTasks, dropId);
 
       const newIds = ordered.map(t => t.id);
-      // If ordering didn't actually change, do nothing.
-      const same = originalIds.length === newIds.length && originalIds.every((v,i) => v === newIds[i]);
-      if (same) {
-        this.listDraggedTask      = null;
-        this.listDropBeforeId     = null;
-        this._listDragGroup       = null;
-        this._listDropTargetGroup = null;
-        return;
+      const same = originalIds.length === newIds.length && originalIds.every((v, i) => v === newIds[i]);
+      if (!same) {
+        const orderKey = targetGroup === 'untagged' ? '__untagged__' : targetGroup;
+        this._applyTaskOrder(orderKey, ordered);
+        this.autosave();
+      }
+      this._resetListDragState();
+    },
+
+    _listCrossGroupDrop(task, sourceGroup, targetGroup) {
+      const lg = this.listGroupBy;
+      const activeTags = Array.isArray(lg) ? lg
+        : lg === 'all' ? this.columnsTagList
+        : [];
+
+      let newTags = [...task.tags];
+
+      // Remove source tag (only when source is a real tag, not 'untagged' or flat '')
+      if (sourceGroup && sourceGroup !== 'untagged') {
+        newTags = newTags.filter(t => t !== sourceGroup);
       }
 
-      // Map group key to taskOrder key
-      const orderKey = groupKey === 'untagged' ? '__untagged__' : groupKey;
-      this._applyTaskOrder(orderKey, ordered);
-      this.listDraggedTask      = null;
-      this.listDropBeforeId     = null;
-      this._listDragGroup       = null;
-      this._listDropTargetGroup = null;
-      this.autosave();
+      if (targetGroup === 'untagged') {
+        // Remove all active group-by tags so the task becomes untagged in this view
+        const activeTagSet = new Set(activeTags);
+        newTags = newTags.filter(t => !activeTagSet.has(t));
+      } else if (targetGroup && targetGroup !== 'untagged') {
+        if (!newTags.includes(targetGroup)) newTags = [...newTags, targetGroup];
+      }
+
+      this._applyTagUpdate(task, newTags);
+
+      // Reorder within target group after tag update is reflected
+      const dropBeforeId = this.listDropBeforeId;
+      if (dropBeforeId !== null) {
+        this.$nextTick(() => {
+          const grp = this.groupedList.find(g => (g.group || '') === (targetGroup || ''));
+          if (!grp) return;
+          const dropId   = dropBeforeId !== -1 ? dropBeforeId : null;
+          const ordered  = this._reorderTasks(task, grp.tasks, dropId);
+          const orderKey = targetGroup === 'untagged' ? '__untagged__' : targetGroup;
+          this._applyTaskOrder(orderKey, ordered);
+        });
+      }
+
+      this._resetListDragState();
     },
 
     /* ─────────────────────────────────────────────
