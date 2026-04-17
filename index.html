@@ -1443,8 +1443,8 @@
                      @keydown.enter.prevent="openTask(task)"
                      @keydown.space.prevent="openTask(task)"
                      :aria-label="'Open task: ' + displayTitle(task)">
-                  <!-- Drag handle — top-right corner, shown on hover -->
-                  <span class="task-card-drag-handle" aria-hidden="true">
+                  <!-- Drag handle — top-right corner, shown on hover only when ordering is enabled -->
+                  <span class="task-card-drag-handle" aria-hidden="true" x-show="tagFilter !== 'none'">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
                          fill="currentColor" aria-hidden="true">
                       <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
@@ -2146,10 +2146,12 @@ function kanbanApp() {
       }));
 
       // Decide whether to append the untagged column:
-      // - If there are no tasks at all, show an empty untagged column so users can add tasks.
-      // - Otherwise, show the untagged column only when there are untagged tasks and the
-      //   "All tags" selected-columns mode is NOT active (requirements: hide for All tags).
-      if (this.tasks.length === 0) {
+      // - If the database has no live tasks, always show an empty untagged column so users
+      //   can add their first task — but never when "All tags" mode is active.
+      // - Otherwise, show the untagged column only when there are untagged tasks and
+      //   "All tags" mode is NOT active.
+      const hasLiveTasks = this.tasks.some(t => t.raw !== '');
+      if (!hasLiveTasks && tf !== 'all') {
         cols.push({ tag: '__untagged__', tasks: [] });
         return cols;
       }
@@ -2374,10 +2376,10 @@ function kanbanApp() {
 
     /* ── Combobox helpers: Task detail tags ── */
     tagCbFilteredTags() {
-      // Follow user tag order preference when showing combobox options
+      // Use columnsTagList for consistent ordering with columns/group comboboxes
       const s = this.tagCb.search.toLowerCase();
       const existing = this.selectedTask?.tags ?? [];
-      const base = this.sortedAllTags; // respects tagOrder preference
+      const base = this.columnsTagList;
       return s
         ? base.filter(t => t.includes(s) && !existing.includes(t))
         : base.filter(t => !existing.includes(t));
