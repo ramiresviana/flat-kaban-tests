@@ -1347,6 +1347,7 @@
       <input class="search-input"
              type="search"
              placeholder="Search tasks…"
+             x-ref="listSearchInput"
              x-model="searchQuery"
              @focus="searchSuggestOpen = true"
              @keydown.escape="searchSuggestOpen = false"
@@ -2191,7 +2192,7 @@ function kanbanApp() {
         if (isSearching || tasks.length) result.push({ group: tag, tasks });
       }
       const untagged = this._orderedTasksForTag('__untagged__', this.visibleTasks.filter(t => !t.tags.some(tag => tagSet.has(tag))));
-      if (untagged.length) result.push({ group: 'untagged', tasks: untagged });
+      if (isSearching || untagged.length) result.push({ group: 'untagged', tasks: untagged });
       return result;
     },
 
@@ -2283,18 +2284,16 @@ function kanbanApp() {
       this.searchQuery       = tag;
       this.searchSuggestOpen = false;
       this.$nextTick(() => {
-        // Ensure the search input loses focus after selecting a suggestion
-        try { if (this.$refs?.searchInput) this.$refs.searchInput.blur(); } catch (e) {}
-        // Prefer scrolling the kanban column into view (search suggestion refers to a tag)
-        try {
-          const colEl = document.querySelector(`.kanban-column[data-column-tag="${tag}"]`);
-          if (colEl) { colEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); return; }
-        } catch (e) {}
-        // Fallback: scroll to first task with the tag
-        const first = this.visibleTasks.find(t => t.tags.includes(tag));
-        if (!first) return;
-        const el = document.querySelector(`[data-task-id="${first.id}"]`);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        // Blur both search inputs so neither retains focus after a suggestion pick
+        try { this.$refs?.searchInput?.blur(); } catch (e) {}
+        try { this.$refs?.listSearchInput?.blur(); } catch (e) {}
+        // In kanban view, scroll the matching column into view (suggestion = tag = column)
+        if (this.currentView === 'kanban') {
+          try {
+            const colEl = document.querySelector(`.kanban-column[data-column-tag="${tag}"]`);
+            if (colEl) colEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          } catch (e) {}
+        }
       });
     },
 
@@ -2501,6 +2500,10 @@ function kanbanApp() {
        ───────────────────────────────────────────── */
 
     openTask(task) {
+      // Blur search inputs so the board interaction takes focus
+      try { this.$refs?.searchInput?.blur(); } catch (e) {}
+      try { this.$refs?.listSearchInput?.blur(); } catch (e) {}
+      this.searchSuggestOpen = false;
       this.selectedTask = task;
       this.bodyText     = extractBody(task.raw);
       this.tagCb.search = '';
