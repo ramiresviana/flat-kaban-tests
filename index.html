@@ -1544,10 +1544,10 @@
                           @dragstart="listRowDragStart($event, task, group.group)"
                         @dragover.prevent="listRowDragOver($event, task, group.group)"
                         @drop.prevent="listRowDrop(group.group)"
-                        @dragend="listDraggedTask = null; listDropBeforeId = null; _listDragGroup = null"
+                        @dragend="listDraggedTask = null; listDropBeforeId = null; _listDragGroup = null; _listDropTargetGroup = null"
                         :class="{
                           'list-drag-row':      listDraggedTask && listDraggedTask.id === task.id,
-                          'drop-line-before':   listDropBeforeId === task.id && _listDragGroup === (group.group || '')
+                          'drop-line-before':   listDraggedTask && listDropBeforeId === task.id && _listDropTargetGroup === (group.group || '')
                         }">
                       <td class="list-title-cell">
                         <span class="list-drag-handle" aria-hidden="true" x-show="listGroupBy !== 'none'">
@@ -2041,6 +2041,7 @@ function kanbanApp() {
 
     listDraggedTask:  null,
     listDropBeforeId: null,
+    _listDropTargetGroup: null,
 
     listGroupBy:    'none',
     collapsedGroups: [],
@@ -2714,6 +2715,13 @@ function kanbanApp() {
 
       if (!task) { this.dropBeforeId = null; this.dragEnd(); return; }
 
+      // Dropping a task directly before itself is a no-op
+      if (this.dropBeforeId === task.id) {
+        this.dropBeforeId = null;
+        this.dragEnd();
+        return;
+      }
+
       if (targetTag === '') {
         // Flat mode ("None" column): reorder via taskOrder preference, not tasks array
         const col     = this.columns.find(c => c.tag === '');
@@ -3059,6 +3067,8 @@ function kanbanApp() {
       if (this.listDraggedTask == null) return;
       // Only allow reorder within the same group
       if ((group ?? '') !== (this._listDragGroup ?? '')) return;
+      // Track the group containing the current drop target for indicator precision
+      this._listDropTargetGroup = group ?? '';
       const rect = event.currentTarget.getBoundingClientRect();
       if (event.clientY < rect.top + rect.height / 2) {
         this.listDropBeforeId = task.id;
@@ -3077,6 +3087,15 @@ function kanbanApp() {
       const task = this.listDraggedTask;
       if (!task) return;
 
+      // Dropping a task onto itself is a no-op
+      if (this.listDropBeforeId === task.id) {
+        this.listDraggedTask      = null;
+        this.listDropBeforeId     = null;
+        this._listDragGroup       = null;
+        this._listDropTargetGroup = null;
+        return;
+      }
+
       const groupKey = group ?? '';
       const grp      = this.groupedList.find(g => (g.group || '') === groupKey);
       const ordered  = grp ? [...grp.tasks] : [...this.visibleTasks];
@@ -3091,21 +3110,23 @@ function kanbanApp() {
       else ordered.push(task);
 
       const newIds = ordered.map(t => t.id);
-      // If ordering didn't actually change (self-drop), do nothing.
+      // If ordering didn't actually change, do nothing.
       const same = originalIds.length === newIds.length && originalIds.every((v,i) => v === newIds[i]);
       if (same) {
-        this.listDraggedTask  = null;
-        this.listDropBeforeId = null;
-        this._listDragGroup   = null;
+        this.listDraggedTask      = null;
+        this.listDropBeforeId     = null;
+        this._listDragGroup       = null;
+        this._listDropTargetGroup = null;
         return;
       }
 
       // Map group key to taskOrder key
       const orderKey = groupKey === 'untagged' ? '__untagged__' : groupKey;
       this._applyTaskOrder(orderKey, ordered);
-      this.listDraggedTask  = null;
-      this.listDropBeforeId = null;
-      this._listDragGroup   = null;
+      this.listDraggedTask      = null;
+      this.listDropBeforeId     = null;
+      this._listDragGroup       = null;
+      this._listDropTargetGroup = null;
       this.autosave();
     },
 
