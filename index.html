@@ -2938,24 +2938,27 @@ function kanbanApp() {
       if (this.colDragSource == null) return;
       // Use precomputed centers if available for better performance
       const center = this._colCenters?.[tag] ?? null;
+      let newTarget;
       if (center !== null) {
-        if (event.clientX < center) this.colDropTarget = tag;
-        else {
+        if (event.clientX < center) {
+          newTarget = tag;
+        } else {
           const idx  = this._colIndexMap[tag] ?? -1;
-          const cols = this.columns;
-          const next = idx >= 0 ? cols[idx + 1] : null;
-          this.colDropTarget = next ? next.tag : tag;
+          const next = idx >= 0 ? this.columns[idx + 1] : null;
+          newTarget = next ? next.tag : tag;
         }
       } else {
         const rect = event.currentTarget.getBoundingClientRect();
-        if (event.clientX < rect.left + rect.width / 2) this.colDropTarget = tag;
-        else {
+        if (event.clientX < rect.left + rect.width / 2) {
+          newTarget = tag;
+        } else {
           const idx  = this._colIndexMap[tag] ?? -1;
-          const cols = this.columns;
-          const next = idx >= 0 ? cols[idx + 1] : null;
-          this.colDropTarget = next ? next.tag : tag;
+          const next = idx >= 0 ? this.columns[idx + 1] : null;
+          newTarget = next ? next.tag : tag;
         }
       }
+      // Only update reactive state when the target changes to avoid redundant re-renders
+      if (this.colDropTarget !== newTarget) this.colDropTarget = newTarget;
     },
 
     colHeaderDrop(event, tag) {
@@ -2970,11 +2973,13 @@ function kanbanApp() {
 
       const ordered = [...this.sortedAllTags];
       const srcIdx  = ordered.indexOf(src);
-      const dstIdx  = ordered.indexOf(dst);
-      if (srcIdx === -1 || dstIdx === -1) return;
+      if (srcIdx === -1) return;
 
       ordered.splice(srcIdx, 1);
-      ordered.splice(dstIdx, 0, src);
+      // Find dst in the post-splice array to get the correct insertion index
+      const newDstIdx = ordered.indexOf(dst);
+      if (newDstIdx >= 0) ordered.splice(newDstIdx, 0, src);
+      else ordered.push(src);
       this.tagOrder             = ordered;
       this.preferences.tagOrder = ordered;
       this._saveDatabase();
