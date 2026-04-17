@@ -637,8 +637,9 @@
       white-space: nowrap;
     }
 
-    /* Reserve left space in the first header column to match hidden row drag handle */
-    .list-table th:first-child { padding-left: calc(var(--s2) + 24px); }
+    /* Reserve left space in the first header column to match hidden row drag handle.
+       Body cell: padding-left(var(--s4)=16px) + drag handle SVG(18px) = 34px total. */
+    .list-table th:first-child { padding-left: calc(var(--s4) + 18px); }
 
     .list-table td {
       padding: var(--s2) var(--s4);
@@ -1804,13 +1805,13 @@ function parseTags(block) {
 
 /** Parse a single block of raw text into a Task object. */
 function parseTask(raw, id) {
+  if (raw === '') return null; // soft-deleted tombstone
   const trimmed = raw.trim();
-  if (!trimmed) return null;
   return {
     id,
-    raw: trimmed,
-    title: parseTitle(trimmed),
-    tags:  parseTags(trimmed),
+    raw: trimmed || raw, // preserve whitespace-only blocks as empty tasks
+    title: parseTitle(raw),
+    tags:  parseTags(raw),
   };
 }
 
@@ -1923,6 +1924,9 @@ function buildTaskRaw(title, tags, body) {
   if (tags && tags.length)   parts.push(tags.map(t => `#${t}`).join(' '));
   const escaped = body ? escapeBody(body.trim()) : '';
   if (escaped) parts.push(escaped);
+  // An empty task (no title, no tags, no body) uses a single newline as a live-task
+  // marker to distinguish it from a soft-deleted tombstone (raw = '').
+  if (!parts.length) return '\n';
   return parts.join('\n');
 }
 
@@ -1942,9 +1946,13 @@ function serializePreferences(prefs) {
  */
 function serializeDatabase(tasks, preferences) {
   let body = tasks.map(t => t.raw ?? '').join(TASK_SEP);
-  // Collapse accidental blank lines between separators produced by soft-deleted blank blocks.
-  // Example: "...\n---\n\n---\n..." → "...\n---\n---\n..."
-  body = body.replace(/\n---\n\n(?=---\n)/g, '\n---\n');
+  // Collapse blank lines between consecutive separators from soft-deleted tombstones.
+  // Loop until stable to handle multiple consecutive soft-deleted tasks.
+  let prev;
+  do {
+    prev = body;
+    body = body.replace(/\n---\n\n(?=---\n)/g, '\n---\n');
+  } while (body !== prev);
   const prefSection = `\n${PREF_MARKER}\n${serializePreferences(preferences)}`;
   return body + prefSection;
 }
