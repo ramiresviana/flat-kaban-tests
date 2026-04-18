@@ -436,6 +436,8 @@
       user-select: none;
     }
 
+    .task-card * { pointer-events: none ;}
+
     .task-card:hover {
       border-color: var(--border-focus);
       box-shadow: var(--shadow-md);
@@ -1164,7 +1166,7 @@
 </head>
 
 <body>
-<div id="app" x-data="kanbanApp()" x-cloak>
+<div id="app" x-data="kanbanApp()" x-cloak @dragover.throttle.document="_onDocDragOver">
 
   <!-- ── HEADER ── -->
   <header id="header" role="banner">
@@ -1255,7 +1257,7 @@
       <div class="combobox-dropdown" x-show="colCb.open">
         <div class="combobox-search-row">
           <input type="text" class="combobox-search-input" x-ref="colSearch"
-                 x-model="colCb.search" placeholder="Search tags…"
+                 x-model.debounce="colCb.search" placeholder="Search tags…"
                  @keydown.escape.stop="colCb.open = false; colCb.search = ''" />
         </div>
         <div class="combobox-options">
@@ -1279,7 +1281,7 @@
               type="search"
               placeholder="Search tasks…"
               x-ref="searchInput"
-              x-model="searchQuery"
+              x-model.debounce="searchQuery"
               @focus="searchSuggestOpen = true"
               @keydown.escape="searchSuggestOpen = false"
               aria-label="Search tasks"
@@ -1316,7 +1318,7 @@
       <div class="combobox-dropdown" x-show="groupCb.open">
         <div class="combobox-search-row">
           <input type="text" class="combobox-search-input" x-ref="groupSearch"
-                 x-model="groupCb.search" placeholder="Search tags…"
+                 x-model.debounce="groupCb.search" placeholder="Search tags…"
                  @keydown.escape.stop="groupCb.open = false; groupCb.search = ''" />
         </div>
         <div class="combobox-options">
@@ -1344,7 +1346,7 @@
              type="search"
              placeholder="Search tasks…"
              x-ref="listSearchInput"
-             x-model="searchQuery"
+             x-model.debounce="searchQuery"
              @focus="searchSuggestOpen = true"
              @keydown.escape="searchSuggestOpen = false"
              aria-label="Search tasks"
@@ -1380,7 +1382,7 @@
           <div class="kanban-column" role="listitem"
                :data-column-tag="col.tag"
                :class="{ 'col-drop-line-before': colDropTarget === col.tag && colDragSource }"
-               @dragover.prevent="colDragSource ? colHeaderDragOver($event, col.tag) : null"
+               @dragover.throttle.prevent="colDragSource ? colHeaderDragOver($event, col.tag) : null"
                @dragleave="colDragSource && colColumnDragLeave($event)"
                @drop.prevent="colDragSource ? colHeaderDrop($event, col.tag) : null">
 
@@ -1415,7 +1417,6 @@
 
             <!-- Drop zone + cards -->
             <div class="kanban-cards"
-                 @dragover.prevent="col.tag === '' ? flatBoardDragOver($event) : null"
                  @drop.prevent="dropOnColumn($event, col.tag)"
                  @dragleave="dropBeforeId = null"
                  :aria-label="col.tag + ' column drop zone'">
@@ -1430,7 +1431,7 @@
                    :data-task-id="task.id"
                      @dragstart="dragStart($event, task, col.tag)"
                      @dragend="dragEnd()"
-                     @dragover.prevent="cardDragOver($event, task, col.tag)"
+                     @dragover.throttle.prevent="cardDragOver($event, task, col.tag)"
                      @dragleave.stop
                      @click.stop="openTask(task)"
                      :class="{
@@ -1482,13 +1483,13 @@
     </div>
 
     <!-- List view -->
-    <div class="view-panel" x-show="currentView === 'list'" role="tabpanel" aria-label="List view">
+    <div class="view-panel" x-show="currentView === 'list'" role="tabpanel" aria-label="List view" x-ref="listPanel">
       <div class="list-view">
 
         <!-- Groups -->
         <template x-for="group in groupedList" :key="group.group">
           <section class="list-section"
-                   @dragover.prevent="listGroupBy !== 'none' && listDraggedTask ? (_listDropTargetGroup = (group.group || '')) : null"
+                   @dragover.throttle.prevent="listGroupBy !== 'none' && listDraggedTask ? (_listDropTargetGroup = (group.group || '')) : null"
                    @drop.prevent="listGroupBy !== 'none' && listDraggedTask ? listRowDrop($event, group.group) : null">
 
             <!-- Group header — only shown when actually grouping -->
@@ -1536,7 +1537,7 @@
                         :aria-label="'Open task: ' + displayTitle(task)"
                         :draggable="listGroupBy !== 'none'"
                         @dragstart="listRowDragStart($event, task, group.group)"
-                        @dragover="listRowDragOver($event, task, group.group)"
+                        @dragover.throttle="listRowDragOver($event, task, group.group)"
                         @drop="listRowDrop($event, group.group)"
                         @dragend="_resetListDragState()"
                         :class="{
@@ -1625,7 +1626,7 @@
 
       <!-- Full-height text editor -->
       <textarea class="raw-editor"
-                x-model="rawDraft"
+                x-model.debounce="rawDraft"
                 @input="rawEdited = rawDraft !== rawText"
                 spellcheck="false"
                 autocomplete="off"
@@ -1693,7 +1694,7 @@
                    type="text"
                    placeholder="Add tag…"
                    x-ref="tagCbInput"
-                   x-model="tagCb.search"
+                   x-model.debounce="tagCb.search"
                    @focus="tagCb.open = true"
                    @keydown.enter.prevent="tagCbCommit()"
                    @keydown.comma.prevent="tagCbCommit()"
@@ -1711,7 +1712,7 @@
               </template>
             </div>
             <div class="combobox-new-hint"
-                 x-show="tagCb.search.trim() && !allTags.some(t => t === tagCb.search.trim().toLowerCase().replace(/[^a-z0-9_-]/g, ''))"
+                 x-show="tagCb.search.trim() && !columnsTagList.some(t => t === tagCb.search.trim().toLowerCase().replace(/[^a-z0-9_-]/g, ''))"
                  @click.stop="tagCbCommit()">
               Create "#<span x-text="tagCb.search.trim()"></span>"
             </div>
@@ -1723,7 +1724,7 @@
       <div class="modal-body-section-grow">
         <p class="modal-section-label">Body</p>
         <textarea class="modal-body-textarea"
-                  x-model="bodyText"
+                  x-model.debounce="bodyText"
                   @input.debounce.400ms="updateBody(selectedTask, $event.target.value)"
                   placeholder="Task notes…"
                   aria-label="Task body"></textarea>
@@ -1769,9 +1770,8 @@ const TITLE_LINE_RE   = /^#title\([^)]*\)$/;
 const AUTOSAVE_DELAY        = 400;  // ms debounce for UI edits
 const SNIPPET_WORDS         = 20;
 const TITLE_FALLBACK_WORDS  = 8;
-const AUTOSCROLL_EDGE_PX    = 80;  // px from edge to start scrolling
+const AUTOSCROLL_EDGE_PX    = 150;  // px from edge to start scrolling
 const AUTOSCROLL_MAX_PX     = 18;  // max px scrolled per animation frame
-const DRAGOVER_THROTTLE_MS  = 16;  // ~60 fps cap for getBoundingClientRect reads
 
 /* ─────────────────────────────────────────────────
    PARSER  (text → model)
@@ -2043,8 +2043,6 @@ function kanbanApp() {
     listDraggedTask:  null,
     listDropBeforeId: null,
     _listDropTargetGroup: null,
-    _cardDragOverTime:  0,
-    _listDragOverTime:  0,
 
     listGroupBy:    'none',
     collapsedGroups: [],
@@ -2214,9 +2212,6 @@ function kanbanApp() {
         if (e.key !== STORAGE_KEY || e.newValue === null) return;
         this._reloadFromStorage(e.newValue);
       });
-
-      // Track pointer position during any drag for auto-scroll
-      document.addEventListener('dragover', this._onDocDragOver.bind(this));
     },
 
     /* ── Theme helpers ── */
@@ -2616,15 +2611,36 @@ function kanbanApp() {
      * Returns a cancel function; store it in `this._stopAutoScroll`.
      */
     _startAutoScroll() {
-      let rafId = null;
+      let rafId, list, board, col, cards = null;
+
+      if (this.currentView == 'list') {
+        list = this.$refs.listPanel;
+      } else if (this.currentView == 'kanban') {
+        board = this.$refs.kanbanBoard;
+        col = this._dragColEl;
+        cards = col?.querySelector('.kanban-cards');
+      }
+
+      const lr = list?.getBoundingClientRect();
+      const br = board?.getBoundingClientRect();
+
+      let cr = cards?.getBoundingClientRect();
 
       const tick = () => {
-        const board = this.$refs.kanbanBoard;
-        const px    = this._dragPointerX;
-        const py    = this._dragPointerY;
+        const px = this._dragPointerX || 0;
+        const py = this._dragPointerY || 0;
 
-        if (board && px != null) {
-          const br = board.getBoundingClientRect();
+        if (px == null || py == null) return;
+
+        if (lr) {
+          if (py < lr.top + AUTOSCROLL_EDGE_PX) {
+            const ratio = 1 - (py - lr.top) / AUTOSCROLL_EDGE_PX;
+            list.scrollTop -= AUTOSCROLL_MAX_PX * ratio;              
+          } else if (py > lr.bottom - AUTOSCROLL_EDGE_PX && py <= lr.bottom) {
+            const ratio = 1 - (lr.bottom - py) / AUTOSCROLL_EDGE_PX;
+            list.scrollTop += AUTOSCROLL_MAX_PX * ratio;
+          }
+        } else if (br) {
           if (px < br.left + AUTOSCROLL_EDGE_PX && px >= br.left) {
             const ratio = 1 - (px - br.left) / AUTOSCROLL_EDGE_PX;
             board.scrollLeft -= AUTOSCROLL_MAX_PX * ratio;
@@ -2632,12 +2648,14 @@ function kanbanApp() {
             const ratio = 1 - (br.right - px) / AUTOSCROLL_EDGE_PX;
             board.scrollLeft += AUTOSCROLL_MAX_PX * ratio;
           }
-        }
 
-        if (this._dragColEl && py != null) {
-          const cards = this._dragColEl.querySelector('.kanban-cards');
-          if (cards) {
-            const cr = cards.getBoundingClientRect();
+          if (col !== this._dragColEl) {
+            col = this._dragColEl;
+            cards = col?.querySelector('.kanban-cards');
+            cr = cards?.getBoundingClientRect();
+          }
+
+          if (cr) {
             if (py < cr.top + AUTOSCROLL_EDGE_PX && py >= cr.top) {
               const ratio = 1 - (py - cr.top) / AUTOSCROLL_EDGE_PX;
               cards.scrollTop -= AUTOSCROLL_MAX_PX * ratio;
@@ -2687,6 +2705,7 @@ function kanbanApp() {
     },
 
     _resetListDragState() {
+      this._stopAutoScroll?.();
       this.listDraggedTask      = null;
       this.listDropBeforeId     = null;
       this._listDragGroup       = null;
@@ -2845,16 +2864,12 @@ function kanbanApp() {
     /** Per-card dragover for any column — computes dropBeforeId using half-height heuristic. */
     cardDragOver(event, task, colTag) {
       if (this.colDragSource !== null) return;
-      const now = Date.now();
-      if (now - this._cardDragOverTime < DRAGOVER_THROTTLE_MS) return;
-      this._cardDragOverTime = now;
       if (this.dropTargetColumn !== colTag) this.dropTargetColumn = colTag;
       // Track the column element for auto-scroll
       const colEl = event.currentTarget.closest('.kanban-column');
       if (this._dragColEl !== colEl) this._dragColEl = colEl;
-      const rect = event.currentTarget.getBoundingClientRect();
       let newDropBeforeId;
-      if (event.clientY < rect.top + rect.height / 2) {
+      if (event.offsetY / event.target.offsetHeight < 0.5) {
         newDropBeforeId = task.id;
       } else {
         const col   = this._cachedColumns.find(c => c.tag === colTag);
@@ -2866,14 +2881,6 @@ function kanbanApp() {
       if (this.dropBeforeId !== newDropBeforeId) this.dropBeforeId = newDropBeforeId;
     },
 
-    /** Dragover on the kanban-cards area below all cards — clears dropBeforeId. */
-    flatBoardDragOver(event) {
-      if (this.colDragSource !== null) return;
-      if (event && event.target !== event.currentTarget) return;
-      if (this.dropBeforeId !== null) this.dropBeforeId = null;
-      if (this.dropTargetColumn !== null) this.dropTargetColumn = null;
-    },
-
     /* ─────────────────────────────────────────────
        COLUMN REORDER DRAG
        ───────────────────────────────────────────── */
@@ -2883,45 +2890,19 @@ function kanbanApp() {
       this._dragColEl       = null; // no column scroll during column reorder
       this._colIndexMap     = Object.fromEntries(this.columns.map((c, i) => [c.tag, i]));
       this._cachedColumns = this.columns;
-      // Precompute column header centers (measured once at drag start) to avoid
-      // frequent getBoundingClientRect calls on every dragover event.
-      try {
-        this._colCenters = {};
-        const headers = this.$refs.kanbanBoard ? this.$refs.kanbanBoard.querySelectorAll('.kanban-column-header') : [];
-        headers.forEach(h => {
-          const colEl = h.closest('.kanban-column');
-          const tagAttr = colEl ? colEl.getAttribute('data-column-tag') : '';
-          const r = h.getBoundingClientRect();
-          this._colCenters[tagAttr] = r.left + r.width / 2;
-        });
-      } catch (e) { this._colCenters = null; }
       this._stopAutoScroll  = this._startAutoScroll();
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', `col:${tag}`);
     },
 
     colHeaderDragOver(event, tag) {
-      if (this.colDragSource == null) return;
-      // Use precomputed centers if available for better performance
-      const center = this._colCenters?.[tag] ?? null;
       let newTarget;
-      if (center !== null) {
-        if (event.clientX < center) {
-          newTarget = tag;
-        } else {
-          const idx  = this._colIndexMap[tag] ?? -1;
-          const next = idx >= 0 ? this._cachedColumns[idx + 1] : null;
-          newTarget = next ? next.tag : tag;
-        }
+      if (event.offsetX / event.target.offsetWidth < 0.5) {
+        newTarget = tag;
       } else {
-        const rect = event.currentTarget.getBoundingClientRect();
-        if (event.clientX < rect.left + rect.width / 2) {
-          newTarget = tag;
-        } else {
-          const idx  = this._colIndexMap[tag] ?? -1;
-          const next = idx >= 0 ? this._cachedColumns[idx + 1] : null;
-          newTarget = next ? next.tag : tag;
-        }
+        const idx  = this._colIndexMap[tag] ?? -1;
+        const next = idx >= 0 ? this._cachedColumns[idx + 1] : null;
+        newTarget = next ? next.tag : tag;
       }
       // Only update reactive state when the target changes to avoid redundant re-renders
       if (this.colDropTarget !== newTarget) this.colDropTarget = newTarget;
@@ -2956,7 +2937,6 @@ function kanbanApp() {
       this._stopAutoScroll = null;
       this.colDragSource = null;
       this.colDropTarget = null;
-      this._colCenters = null;
       this._cachedColumns = null;
     },
 
@@ -3035,21 +3015,17 @@ function kanbanApp() {
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', String(task.id));
       this._cachedGroupList = this.groupedList;
+      this._stopAutoScroll  = this._startAutoScroll();
     },
 
     listRowDragOver(event, task, group) {
       if (this.listGroupBy === 'none') return;
       if (this.listDraggedTask == null) return;
-      const now = Date.now();
-      if (now - this._listDragOverTime < DRAGOVER_THROTTLE_MS) return;
-      this._listDragOverTime = now;
       event.preventDefault();
       const newGroup = group ?? '';
       if (this._listDropTargetGroup !== newGroup) this._listDropTargetGroup = newGroup;
-      const rect = event.currentTarget.getBoundingClientRect();
-      const isAboveMiddle = event.clientY < rect.top + rect.height / 2;
       let newDropBeforeId;
-      if (isAboveMiddle) {
+      if (event.offsetY / event.target.offsetHeight < 0.5) {
         newDropBeforeId = task.id;
       } else {
         const grp  = this._cachedGroupList.find(g => (g.group || '') === (group || ''));
