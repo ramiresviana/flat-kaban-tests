@@ -415,20 +415,17 @@
     .kanban-cards {
       flex: 1;
       overflow-y: auto;
-      padding: var(--s3);
       display: flex;
       flex-direction: column;
-      gap: var(--s2);
       min-height: 80px;
-      border-radius: 0 0 var(--r3) var(--r3);
       transition: background var(--ease);
     }
 
     /* Task card */
     .task-card {
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--r2);
+      border: 1px solid transparent;
+      border-bottom-color: var(--border);
       padding: var(--s3) var(--s4);
       cursor: pointer;
       box-shadow: var(--shadow-sm);
@@ -515,6 +512,7 @@
       color: var(--text-3);
       font-size: 0.8125rem;
       padding: var(--s5) var(--s4);
+      margin: var(--s3);
       border: 1px dashed var(--border);
       border-radius: var(--r2);
     }
@@ -1102,10 +1100,21 @@
       position: absolute;
       left: 0;
       right: 0;
-      top: calc(-2 * var(--s1) + 2px);
-      height: 2px;
+      top: -1px;
+      height: 3px;
       background: var(--accent);
-      border-radius: 1px;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .kanban-cards.drop-line-last .task-card:last-child::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 3px;
+      background: var(--accent);
       pointer-events: none;
       z-index: 5;
     }
@@ -1417,8 +1426,9 @@
 
             <!-- Drop zone + cards -->
             <div class="kanban-cards"
+                 :class="{ 'drop-line-last': dropTargetColumn === col.tag && dropBeforeId === null && draggedTask }"
                  @drop.prevent="dropOnColumn($event, col.tag)"
-                 @dragleave="dropBeforeId = null"
+                 @dragleave="dropBeforeId = null; dropTargetColumn = null"
                  :aria-label="col.tag + ' column drop zone'">
 
               <div class="column-empty" x-show="col.tasks.length === 0">
@@ -1962,7 +1972,7 @@ function serializeDatabase(tasks, preferences) {
    ───────────────────────────────────────────────── */
 
 const DEMO_DATA = `#title(Design new landing page)
-#design #ux
+#design
 Redesign the homepage with the updated brand guidelines.
 Include hero section, feature highlights, and CTA.
 Review with marketing team before handoff.
@@ -1993,6 +2003,27 @@ Priority: focus management, colour contrast, ARIA labels.
 #devops
 Run npm audit. Update packages with known vulnerabilities.
 Test thoroughly — last update broke the date picker.
+---
+#title(Create icon set for product)
+#design
+Create a consistent icon set for the product (24/32/48 px).
+Follow the brand color palette and stroke widths.
+Provide SVGs, optimized PNGs, and a Figma source file.
+Deliver: individual SVGs and a symbol library for handoff.
+---
+#title(Design onboarding flow)
+#ux #design
+Map out the new-user onboarding flow and content.
+Include welcome screens, progressive disclosure, and tooltips.
+Produce a clickable Figma prototype and copy suggestions.
+Acceptance: prototype walkthrough covers first-time user tasks.
+---
+#title(Prototype mobile settings UI)
+#design
+Design and prototype the mobile settings screen.
+Focus on grouped controls, accessible toggles, and readable labels.
+Include touch-target guidelines and typography tokens.
+Deliver a Figma prototype and a component export for dev handoff.
 ---PREFERENCES---
 theme=auto
 tagFilter=all
@@ -2000,7 +2031,7 @@ listGroupBy=none`;
 
 /** Load raw text from localStorage, falling back to demo seed on first run. */
 function loadFromStorage() {
-  return localStorage.getItem(STORAGE_KEY) ?? DEMO_DATA;
+  return localStorage.getItem(STORAGE_KEY);
 }
 
 /** Persist raw text to localStorage. */
@@ -2187,6 +2218,20 @@ function kanbanApp() {
     /* ── Lifecycle ── */
     init() {
       this.rawText = loadFromStorage();
+      if (!this.rawText) {
+        const { tasks, preferences } = parseDatabase(DEMO_DATA);
+
+        this.tasks                 = tasks;
+        this.preferences           = preferences;
+        this.taskOrder             = this._computeTaskOrder();
+        this.preferences.taskOrder = this.taskOrder;
+
+        const allParsedTags = [...new Set(tasks.flatMap(t => t.tags))];
+        this._syncTagOrder(allParsedTags);
+
+        this.rawText = serializeDatabase(this.tasks, this.preferences);
+      }
+
       const { tasks, preferences } = parseDatabase(this.rawText);
       this.tasks       = tasks;
       this.preferences = preferences;
