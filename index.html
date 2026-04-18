@@ -417,7 +417,6 @@
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      min-height: 80px;
       transition: background var(--ease);
     }
 
@@ -1637,7 +1636,7 @@
       <!-- Full-height text editor -->
       <textarea class="raw-editor"
                 x-model.debounce="rawDraft"
-                @input="rawEdited = rawDraft !== rawText"
+                @input="rawEdited = true"
                 spellcheck="false"
                 autocomplete="off"
                 autocorrect="off"
@@ -1773,9 +1772,9 @@ const STORAGE_KEY   = 'pk_db';
 const PREF_MARKER   = '---PREFERENCES---';
 const TASK_SEP      = '\n---\n';
 const TITLE_RE      = /#title\(([^)]*)\)/;
-const TAG_RE        = /(?<!\\)#([a-zA-Z0-9][a-zA-Z0-9_-]*)/g;
+const TAG_RE        = /(?<!\\)#([a-zA-Z0-9][a-zA-Z0-9_-]*)(?:\((\d+)\))?/g;
 // A line is a "managed metadata line" if every non-empty token starts with #
-const MANAGED_LINE_RE = /^(\s*#[a-zA-Z0-9][a-zA-Z0-9_-]*\s*)+$/;
+const MANAGED_LINE_RE = /^(\s*#[a-zA-Z0-9][a-zA-Z0-9_-]*(?:\(\d+\))?\s*)+$/;
 const TITLE_LINE_RE   = /^#title\([^)]*\)$/;
 const AUTOSAVE_DELAY        = 400;  // ms debounce for UI edits
 const SNIPPET_WORDS         = 20;
@@ -1798,28 +1797,33 @@ function parseTitle(block) {
   return m ? m[1].trim() : null;
 }
 
-/** Collect all #tag tokens, excluding the literal word "title" used in #title(). */
+/** Collect all #tag and #tag(N) tokens, excluding the literal word "title" used in #title(). */
 function parseTags(block) {
   // Strip #title(...) occurrences first so "title" token is not captured
   const stripped = block.replace(/#title\([^)]*\)/g, '');
   const tags = new Set();
+  const tagPositions = {};
   let m;
   TAG_RE.lastIndex = 0;
   while ((m = TAG_RE.exec(stripped)) !== null) {
-    tags.add(m[1].toLowerCase());
+    const tag = m[1].toLowerCase();
+    tags.add(tag);
+    if (m[2] !== undefined) tagPositions[tag] = parseInt(m[2], 10);
   }
-  return [...tags];
+  return { tags: [...tags], tagPositions };
 }
 
 /** Parse a single block of raw text into a Task object. */
 function parseTask(raw, id) {
-  if (raw === '') return { id, raw: '', title: null, tags: [] }; // tombstone
+  if (raw === '') return { id, raw: '', title: null, tags: [], tagPositions: {} }; // tombstone
   const trimmed = raw.trim();
+  const { tags, tagPositions } = parseTags(raw);
   return {
     id,
     raw: trimmed || raw, // preserve whitespace-only blocks as empty tasks
     title: parseTitle(raw),
-    tags:  parseTags(raw),
+    tags,
+    tagPositions,
   };
 }
 
@@ -1830,7 +1834,6 @@ function parsePreferences(text) {
     tagFilter:    'all',
     listGroupBy:  'none',
     tagOrder:     [],
-    taskOrder:    {},
   };
   if (!text) return defaults;
   for (const line of text.split('\n')) {
@@ -1841,8 +1844,6 @@ function parsePreferences(text) {
     if (k in defaults) {
       if (k === 'tagOrder') {
         defaults[k] = v ? v.split(',').filter(Boolean) : [];
-      } else if (k === 'taskOrder') {
-        try { defaults[k] = JSON.parse(v); } catch { defaults[k] = {}; }
       } else if ((k === 'tagFilter' || k === 'listGroupBy') && v.includes(',')) {
         defaults[k] = v.split(',').filter(Boolean);
       } else {
@@ -1933,11 +1934,17 @@ function extractBody(raw) {
 /**
  * Rebuild a task block from its constituent parts.
  * Managed metadata is placed at the top; user body follows (escaped).
+ * tagPositions maps tag name → column rank (written as #tag(N)).
  */
-function buildTaskRaw(title, tags, body) {
+function buildTaskRaw(title, tags, body, tagPositions = {}) {
   const parts = [];
   if (title && title.trim()) parts.push(`#title(${title.trim()})`);
-  if (tags && tags.length)   parts.push(tags.map(t => `#${t}`).join(' '));
+  if (tags && tags.length) {
+    parts.push(tags.map(t => {
+      const pos = tagPositions?.[t];
+      return pos !== undefined ? `#${t}(${pos})` : `#${t}`;
+    }).join(' '));
+  }
   const escaped = body ? escapeBody(body.trim()) : '';
   if (escaped) parts.push(escaped);
   // An empty task (no title, no tags, no body) uses a single newline as a live-task
@@ -1948,11 +1955,11 @@ function buildTaskRaw(title, tags, body) {
 
 /** Serialize preferences object to key=value lines. */
 function serializePreferences(prefs) {
-  return Object.entries(prefs).map(([k, v]) => {
-    if (k === 'taskOrder') return `${k}=${JSON.stringify(v)}`;
-    const val = Array.isArray(v) ? v.join(',') : v;
-    return `${k}=${val}`;
-  }).join('\n');
+  return Object.entries(prefs)
+    .map(([k, v]) => {
+      const val = Array.isArray(v) ? v.join(',') : v;
+      return `${k}=${val}`;
+    }).join('\n');
 }
 
 /**
@@ -2067,7 +2074,6 @@ function kanbanApp() {
     colDragSource:    null,
     colDropTarget:    null,
     tagOrder:         [],
-    taskOrder:        {},
     boardPanning:     false,
     _colIndexMap:     {},
 
@@ -2099,6 +2105,9 @@ function kanbanApp() {
     colCb:   { open: false, search: '' },
     groupCb: { open: false, search: '' },
     tagCb:   { open: false, search: '' },
+
+    _boardScrollLock: false,
+    _boardScrollLockMoveHandler: null,
 
     /**
      * Ordered tag list for column/group display: tagOrder entries first (even if empty),
@@ -2221,10 +2230,8 @@ function kanbanApp() {
       if (!this.rawText) {
         const { tasks, preferences } = parseDatabase(DEMO_DATA);
 
-        this.tasks                 = tasks;
-        this.preferences           = preferences;
-        this.taskOrder             = this._computeTaskOrder();
-        this.preferences.taskOrder = this.taskOrder;
+        this.tasks       = tasks;
+        this.preferences = preferences;
 
         const allParsedTags = [...new Set(tasks.flatMap(t => t.tags))];
         this._syncTagOrder(allParsedTags);
@@ -2273,7 +2280,6 @@ function kanbanApp() {
       this.tagFilter   = storedTf === 'none' ? 'all' : storedTf;
       this.listGroupBy = preferences.listGroupBy ?? 'none';
       this.tagOrder    = (preferences.tagOrder   ?? []).filter(t => t !== '__untagged__');
-      this.taskOrder   = preferences.taskOrder   ?? {};
     },
 
     toggleTheme() {
@@ -2425,25 +2431,8 @@ function kanbanApp() {
     /* ── Persistence ── */
     _saveDatabase() {
       if (this._externalUpdate) return;
-      const taskOrder = this._computeTaskOrder();
-      this.taskOrder             = taskOrder;
-      this.preferences.taskOrder = taskOrder;
       this.rawText = serializeDatabase(this.tasks, this.preferences);
       saveToStorage(this.rawText);
-    },
-
-    /** Snapshot current task ordering for all tags and the untagged group. */
-    _computeTaskOrder() {
-      const to = { ...(this.taskOrder || {}) };
-      for (const tag of this.columnsTagList) {
-        const taggedTasks = this.tasks.filter(t => t.raw !== '' && t.tags.includes(tag));
-        to[tag] = this._orderedTasksForTag(tag, taggedTasks).map(t => t.id);
-      }
-      const untaggedTasks = this.tasks.filter(t => t.raw !== '' && (!t.tags || t.tags.length === 0));
-      if (untaggedTasks.length) {
-        to['__untagged__'] = this._orderedTasksForTag('__untagged__', untaggedTasks).map(t => t.id);
-      }
-      return to;
     },
 
     /** Reload in-memory state from a raw text string (called on storage events from other tabs). */
@@ -2490,7 +2479,7 @@ function kanbanApp() {
         if (typeof text !== 'string') return;
         const { tasks, preferences } = parseDatabase(text);
         tasks.forEach(task => {
-          task.raw = buildTaskRaw(task.title, task.tags, extractBody(task.raw));
+          task.raw = buildTaskRaw(task.title, task.tags, extractBody(task.raw), task.tagPositions);
         });
         this.tasks       = tasks;
         this.preferences = preferences;
@@ -2514,7 +2503,7 @@ function kanbanApp() {
     saveRaw() {
       const { tasks, preferences } = parseDatabase(this.rawDraft);
       tasks.forEach(task => {
-        task.raw = buildTaskRaw(task.title, task.tags, extractBody(task.raw));
+        task.raw = buildTaskRaw(task.title, task.tags, extractBody(task.raw), task.tagPositions);
       });
       this.tasks       = tasks;
       this.preferences = preferences;
@@ -2561,7 +2550,8 @@ function kanbanApp() {
         this.selectedTask.raw = buildTaskRaw(
           this.selectedTask.title,
           this.selectedTask.tags,
-          this.bodyText
+          this.bodyText,
+          this.selectedTask.tagPositions
         );
         this._saveDatabase();
       }
@@ -2577,13 +2567,13 @@ function kanbanApp() {
       if (!task) return;
       const trimmed = newTitle.trim();
       task.title = trimmed || null;
-      task.raw   = buildTaskRaw(task.title, task.tags, extractBody(task.raw));
+      task.raw   = buildTaskRaw(task.title, task.tags, extractBody(task.raw), task.tagPositions);
       this.autosave();
     },
 
     updateBody(task, newBody) {
       if (!task) return;
-      task.raw = buildTaskRaw(task.title, task.tags, newBody);
+      task.raw = buildTaskRaw(task.title, task.tags, newBody, task.tagPositions);
       this.autosave();
     },
 
@@ -2825,8 +2815,15 @@ function kanbanApp() {
     /** Central helper that rebuilds a task's raw block after a tag/title change. */
     _applyTagUpdate(task, newTags) {
       const body = extractBody(task.raw);
-      task.raw   = buildTaskRaw(task.title, newTags, body);
-      task.tags  = newTags;
+      // Only preserve positions for tags that remain in newTags
+      const positions = Object.fromEntries(
+        newTags
+          .filter(t => task.tagPositions?.[t] !== undefined)
+          .map(t => [t, task.tagPositions[t]])
+      );
+      task.tags = newTags;
+      task.tagPositions = positions;
+      task.raw   = buildTaskRaw(task.title, newTags, body, positions);
       this.autosave();
     },
 
@@ -2845,26 +2842,28 @@ function kanbanApp() {
     },
 
     /**
-     * Return `tasks` reordered according to `taskOrder[tag]`.
-     * Tasks listed in the stored order come first; unlisted tasks are appended.
+     * Return `tasks` sorted by their embedded per-tag position (#tag(N)).
+     * Tasks without a stored position sort after all ranked tasks (stable by original order).
      */
     _orderedTasksForTag(tag, tasks) {
-      const order = this.taskOrder[tag] ?? [];
-      if (!order.length) return tasks;
-      const map      = Object.fromEntries(tasks.map(t => [t.id, t]));
-      const listed   = order.map(id => map[id]).filter(Boolean);
-      const listedIds = new Set(order);
-      const unlisted = tasks.filter(t => !listedIds.has(t.id));
-      return [...listed, ...unlisted];
+      if (!tag || tag === '__untagged__') return tasks;
+      return [...tasks].sort((a, b) => {
+        const posA = a.tagPositions?.[tag] ?? Infinity;
+        const posB = b.tagPositions?.[tag] ?? Infinity;
+        return posA - posB;
+      });
     },
 
-    /** Persist the given ordered task list as `taskOrder[tag]`. */
+    /** Assign contiguous rank positions for `tag` in `tasks` and rebuild each task's raw. */
     _applyTaskOrder(tag, tasks) {
-      const o = { ...this.taskOrder };
-      o[tag]  = tasks.map(t => t.id);
-      this.taskOrder             = o;
-      this.preferences.taskOrder = o;
+      if (!tag || tag === '__untagged__') return;
+      tasks.forEach((task, index) => {
+        if (task.raw === '') return;
+        task.tagPositions = { ...(task.tagPositions ?? {}), [tag]: index };
+        task.raw = buildTaskRaw(task.title, task.tags, extractBody(task.raw), task.tagPositions);
+      });
     },
+    
 
     /** Append any candidateTags not yet in tagOrder (sorted). */
     _syncTagOrder(candidateTags) {
@@ -2873,21 +2872,18 @@ function kanbanApp() {
       if (!added.length) return;
       this.tagOrder             = [...order, ...added];
       this.preferences.tagOrder = this.tagOrder;
-      // Ensure taskOrder entries exist for new tags
-      const to = { ...this.taskOrder };
-      let changed = false;
-      added.forEach(t => { if (!(t in to)) { to[t] = []; changed = true; } });
-      if (changed) {
-        this.taskOrder             = to;
-        this.preferences.taskOrder = to;
-      }
     },
 
     addTaskToColumn(tag) {
       const newId = this.tasks.length ? Math.max(...this.tasks.map(t => t.id)) + 1 : 1;
       const tags  = (tag && tag !== '__untagged__') ? [tag] : [];
-      const raw   = buildTaskRaw(null, tags, '');
-      const task  = { id: newId, raw, title: null, tags };
+      const tagPositions = {};
+      if (tags.length) {
+        const count = this.tasks.filter(t => t.raw !== '' && t.tags.includes(tags[0])).length;
+        tagPositions[tags[0]] = count; // append at end of column
+      }
+      const raw  = buildTaskRaw(null, tags, '', tagPositions);
+      const task = { id: newId, raw, title: null, tags, tagPositions };
       this.tasks.push(task);
       this.autosave();
       this.openTask(task);
@@ -3043,10 +3039,29 @@ function kanbanApp() {
     /** Translate vertical wheel events into horizontal board scroll. */
     boardWheelScroll(event) {
       if (event.deltaY === 0) return;
-      // If the pointer is over a vertically scrollable column, let it scroll normally
-      if (event.target.closest('.kanban-cards')) return;
+      // While lock is active, route column-area wheel to horizontal board scroll
+      const overColumn = !!event.target.closest('.kanban-cards');
+      if (overColumn && !this._boardScrollLock) return; // normal column scroll
       event.preventDefault();
       this.$refs.kanbanBoard.scrollLeft += event.deltaY;
+      this._setBoardScrollLock();
+    },
+
+    /** Activate the board-scroll lock and register a one-shot mousemove to clear it. */
+    _setBoardScrollLock() {
+      this._boardScrollLock = true;
+      if (this._boardScrollLockMoveHandler) return;
+
+      let movement = 0;
+      this._boardScrollLockMoveHandler = (event) => {
+        movement += Math.abs(event.movementX) + Math.abs(event.movementY);
+        if (movement < 50) return;
+
+        this._boardScrollLock = false;
+        document.removeEventListener('mousemove', this._boardScrollLockMoveHandler);
+        this._boardScrollLockMoveHandler = null;
+      };
+      document.addEventListener('mousemove', this._boardScrollLockMoveHandler);
     },
 
     /* ─────────────────────────────────────────────
