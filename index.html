@@ -1381,6 +1381,10 @@
       <div class="kanban-board" x-show="columns.length > 0" role="list"
            x-ref="kanbanBoard"
            :class="{ 'is-panning': boardPanning }"
+           @keydown.document.page-up="boardPageKeyPress"
+           @keydown.document.page-down="boardPageKeyPress"
+           @keydown.document.home="boardPageKeyPress"
+           @keydown.document.end="boardPageKeyPress"
            @mousedown="boardMouseDown($event)"
            @wheel.passive="false"
            @wheel="boardWheelScroll($event)">
@@ -3068,6 +3072,8 @@ function kanbanApp() {
         }
       } catch (e) { /* defensive: ignore if refs unavailable */ }
 
+      document.activeElement?.blur?.();
+
       const board     = this.$refs.kanbanBoard;
       const startX    = event.pageX;
       const startLeft = board.scrollLeft;
@@ -3129,6 +3135,25 @@ function kanbanApp() {
       event.preventDefault();
       this.$refs.kanbanBoard.scrollLeft += event.deltaY;
       this._setBoardScrollLock();
+    },
+
+    boardPageKeyPress(event) {
+      if (this.currentView !== 'kanban') return;
+      if (!!event.target.closest('.kanban-cards')) return; // normal column scroll
+      event.preventDefault();
+      const board = this.$refs.kanbanBoard;
+
+      let position = 0;
+      if (event.key === 'PageDown') {
+        position = board.scrollLeft + board.clientWidth;
+      } else if (event.key === 'PageUp') {
+        position = board.scrollLeft - board.clientWidth;
+      } else if (event.key === 'Home') {
+        position = 0;
+      } else if (event.key === 'End') {
+        position = board.scrollWidth;
+      }
+      board.scrollTo({ left: position, behavior: 'smooth' });
     },
 
     /** Activate the board-scroll lock and register a one-shot mousemove to clear it. */
