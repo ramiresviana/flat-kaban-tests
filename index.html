@@ -3183,6 +3183,15 @@ function kanbanApp() {
       this._resetListDragState();
     },
 
+    /**
+     * Handle a cross-group drop in the list view: update the task's tags so it moves
+     * from sourceGroup to targetGroup, and land it at the correct position immediately.
+     *
+     * Fix for brief-flash bug: the target position is pre-stamped into tagPositions
+     * before _applyTagUpdate is called. This way buildTaskRaw bakes the correct #tag(N)
+     * into the raw string in the same mutation that changes the tags — no separate tick
+     * is needed and the task never renders at the wrong position.
+     */
     _listCrossGroupDrop(task, sourceGroup, targetGroup) {
       const lg = this.listGroupBy;
       const activeTags = Array.isArray(lg) ? lg
@@ -3204,18 +3213,30 @@ function kanbanApp() {
         if (!newTags.includes(targetGroup)) newTags = [...newTags, targetGroup];
       }
 
+      // Pre-stamp position before the tag update so the first render shows the right slot
+      const dropBeforeId = this.listDropBeforeId;
+      const orderKey     = targetGroup === 'untagged' ? '__untagged__' : (targetGroup || '');
+      if (dropBeforeId !== null && orderKey && orderKey !== '__untagged__') {
+        const grp        = this.groupedList.find(g => (g.group || '') === (targetGroup || ''));
+        const groupTasks = grp ? grp.tasks : [];
+        // Include the task in the base list if it isn't already (cross-group: it won't be)
+        const baseTasks  = groupTasks.find(t => t.id === task.id) ? groupTasks : [...groupTasks, task];
+        const dropId     = dropBeforeId !== -1 ? dropBeforeId : null;
+        const ordered    = this._reorderTasks(task, baseTasks, dropId);
+        const newPos     = ordered.findIndex(t => t.id === task.id);
+        if (newPos !== -1) {
+          task.tagPositions = { ...(task.tagPositions ?? {}), [orderKey]: newPos };
+        }
+      }
+
+      // Apply tag update — builds raw with the already pre-stamped position
       this._applyTagUpdate(task, newTags);
 
-      // Reorder within target group after tag update is reflected
-      const dropBeforeId = this.listDropBeforeId;
-      if (dropBeforeId !== null) {
+      // Renumber all tasks in the target group via nextTick to close any rank gaps
+      if (orderKey && orderKey !== '__untagged__') {
         this.$nextTick(() => {
-          const grp = this.groupedList.find(g => (g.group || '') === (targetGroup || ''));
-          if (!grp) return;
-          const dropId   = dropBeforeId !== -1 ? dropBeforeId : null;
-          const ordered  = this._reorderTasks(task, grp.tasks, dropId);
-          const orderKey = targetGroup === 'untagged' ? '__untagged__' : targetGroup;
-          this._applyTaskOrder(orderKey, ordered);
+          const updatedGrp = this.groupedList.find(g => (g.group || '') === (targetGroup || ''));
+          if (updatedGrp) this._applyTaskOrder(orderKey, updatedGrp.tasks);
         });
       }
 
