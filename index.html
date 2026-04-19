@@ -1816,7 +1816,7 @@ function parseTags(block) {
 
 /** Parse a single block of raw text into a Task object. */
 function parseTask(raw, id) {
-  if (raw === '') return { id, raw: '', title: null, tags: [], tagPositions: {} }; // tombstone
+  if (raw === '') return { id, raw: '', title: null, tags: [], tagPositions: {} }; // empty block (filtered out by parseDatabase)
   const trimmed = raw.trim();
   const { tags, tagPositions } = parseTags(raw);
   return {
@@ -1858,7 +1858,7 @@ function parsePreferences(text) {
 /**
  * parseDatabase(text) → { tasks: Task[], preferences: Preferences }
  * Round-trip safe: tasks preserve their original `raw` strings.
- * Tombstones (raw='') are preserved in the array to keep IDs stable.
+ * Empty blocks from legacy soft-deleted databases are filtered out on load.
  */
 function parseDatabase(text) {
   let mainText = text;
@@ -1965,9 +1965,7 @@ function serializePreferences(prefs) {
 
 /**
  * serializeDatabase(tasks, preferences) → string
- * Joins task.raw values (including soft-deleted blank blocks) with TASK_SEP;
- * appends preferences section. Blank blocks preserve task indices and are
- * handled correctly by parseDatabase's split-based parser.
+ * Joins each task's raw string with TASK_SEP and appends the preferences section.
  */
 function serializeDatabase(tasks, preferences) {
   const body = tasks.map(t => t.raw ?? '').join(TASK_SEP);
@@ -2122,6 +2120,10 @@ function kanbanApp() {
     // Memoization caches: eliminate redundant per-render computation
     _snippetCache: new Map(), // key: taskId + '|' + task.raw → snippet string
     _tagHueCache:  new Map(), // key: tag string → hue number (never expires)
+
+    // Drag-session snapshots: frozen at drag-start so midair mutations don't shift targets
+    _cachedColumns:   null, // snapshot of columns[] used during kanban/column drag
+    _cachedGroupList: null, // snapshot of groupedList[] used during list drag
 
     /** Filter tasks by the current searchQuery. Returns a new filtered array. */
     _applySearchFilter(tasks) {
@@ -2837,12 +2839,12 @@ function kanbanApp() {
       }
     },
 
-    /* ─────────────────────────────────────────────────
+    /* ─────────────────────────────────────────────
        CACHE REFRESH  (explicit computed-state updates)
        Replaces Alpine getter functions with explicit state properties.
        Each _refreshX() recomputes one cache slice; _refreshAllCaches()
        runs them all in dependency order.
-       ───────────────────────────────────────────────── */
+       ───────────────────────────────────────────── */
 
     /** columnsTagList: tagOrder entries first, then alphabetically sorted extras. */
     _refreshColumnsTagList() {
