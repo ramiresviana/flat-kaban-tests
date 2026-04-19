@@ -2110,38 +2110,20 @@ function kanbanApp() {
     _boardScrollLock: false,
     _boardScrollLockMoveHandler: null,
 
-    /**
-     * Ordered tag list for column/group display: tagOrder entries first (even if empty),
-     * then task tags not yet in tagOrder. Used by columns getter and comboboxes.
-     * __untagged__ sentinel is always excluded — it is never a real tag column.
-     */
-    get columnsTagList() {
-      const order = (Array.isArray(this.tagOrder) ? this.tagOrder : [])
-        .filter(t => t !== '__untagged__');
-      const taskTags = new Set(this.tasks.flatMap(t => t.tags));
-      const extra = [...taskTags].filter(t => !order.includes(t)).sort();
-      return [...order, ...extra];
-    },
+    /* ── Cached computed state — updated by _refreshAllCaches() on every mutation ── */
+    columnsTagList:    [],
+    searchSuggestions: [],
+    visibleTasks:      [],
+    visibleTasksAsc:   [],
+    kanbanTasks:       [],
+    columns:           [],
+    groupedList:       [],
 
-    /** Tags matching the current searchQuery, in columnsTagList order. */
-    get searchSuggestions() {
-      const q = this.searchQuery.toLowerCase().trim();
-      const base = this.columnsTagList;
-      if (!q) return base;
-      return base.filter(t => t.includes(q));
-    },
+    // Memoization caches: eliminate redundant per-render computation
+    _snippetCache: new Map(), // key: taskId + '|' + task.raw → snippet string
+    _tagHueCache:  new Map(), // key: tag string → hue number (never expires)
 
-    /* ── Computed: tasks filtered by searchQuery only — newest first ── */
-    get visibleTasks() {
-      return this._applySearchFilter([...this.tasks].reverse());
-    },
-
-    /* ── Computed: live tasks in insertion order (oldest first) for list/none mode ── */
-    get visibleTasksAsc() {
-      return this._applySearchFilter([...this.tasks]);
-    },
-
-    /** Filter tasks by the current searchQuery. Returns the input array filtered in-place. */
+    /** Filter tasks by the current searchQuery. Returns a new filtered array. */
     _applySearchFilter(tasks) {
       if (!this.searchQuery.trim()) return tasks;
       const q = this.searchQuery.toLowerCase();
@@ -2149,78 +2131,6 @@ function kanbanApp() {
         t.raw.toLowerCase().includes(q) ||
         (t.title && t.title.toLowerCase().includes(q))
       );
-    },
-
-    /* ── Computed: tasks filtered for kanban view (tagFilter + search) ── */
-    get kanbanTasks() {
-      let result = this.visibleTasks;
-      const tf = this.tagFilter;
-
-      if (tf === 'all') {
-        result = result.filter(t => t.tags.length > 0);
-      } else if (tf !== 'none') {
-        const tags = Array.isArray(tf) ? tf : [tf];
-        result = result.filter(t => tags.some(tag => t.tags.includes(tag)));
-      }
-      return result;
-    },
-
-    /* ── Computed: columns for Kanban view ── */
-    get columns() {
-      const tf = this.tagFilter;
-      if (tf === 'none') {
-        // Flat mode: always show a single "All tasks" column, even when empty.
-        return [{ tag: '', tasks: this._orderedTasksForTag('', this.kanbanTasks) }];
-      }
-      // Sanitise tag list: __untagged__ is a sentinel, never a real tag column.
-      const rawTags = tf === 'all' ? this.columnsTagList
-                    : Array.isArray(tf) ? tf
-                    : [tf];
-      const tags = rawTags.filter(t => t !== '__untagged__');
-      const cols = tags.map(tag => ({
-        tag,
-        tasks: this._orderedTasksForTag(tag, this.kanbanTasks.filter(t => t.tags.includes(tag))),
-      }));
-
-      // Append the untagged column when there are untagged tasks OR when there are no
-      // tasks at all (so users always have a column to add their first task).
-      const untaggedTasks = this.visibleTasks.filter(t => t.tags.length === 0);
-      if (untaggedTasks.length > 0 || !this.tasks.length) {
-        cols.push({ tag: '__untagged__', tasks: this._orderedTasksForTag('__untagged__', untaggedTasks) });
-      }
-
-      return cols;
-    },
-
-    /* ── Computed: grouped task list ── */
-    get groupedList() {
-      const lg = this.listGroupBy;
-
-      if (lg === 'none') {
-        return [{ group: '', tasks: this.visibleTasksAsc }];
-      }
-      if (lg === 'all') {
-        const result = [];
-        const isSearching = Boolean(this.searchQuery && this.searchQuery.trim());
-        for (const tag of this.columnsTagList) {
-          const tasks = this._orderedTasksForTag(tag, this.visibleTasks.filter(t => t.tags.includes(tag)));
-          if (isSearching || tasks.length) result.push({ group: tag, tasks });
-        }
-        const untagged = this._orderedTasksForTag('__untagged__', this.visibleTasks.filter(t => t.tags.length === 0));
-        if (isSearching || untagged.length || !this.tasks.length) result.push({ group: 'untagged', tasks: untagged });
-        return result;
-      }
-      const tags = Array.isArray(lg) ? lg : [lg];
-      const result = [];
-      const isSearching = Boolean(this.searchQuery && this.searchQuery.trim());
-      for (const tag of tags) {
-        const tasks = this._orderedTasksForTag(tag, this.visibleTasks.filter(t => t.tags.includes(tag)));
-        if (isSearching || tasks.length) result.push({ group: tag, tasks });
-      }
-      // Untagged group: only tasks with NO tags at all (not merely lacking the selected tags)
-      const untagged = this._orderedTasksForTag('__untagged__', this.visibleTasks.filter(t => t.tags.length === 0));
-      if (isSearching || untagged.length || !this.tasks.length) result.push({ group: 'untagged', tasks: untagged });
-      return result;
     },
 
     /* ── Lifecycle ── */
@@ -2244,13 +2154,23 @@ function kanbanApp() {
 
       this._loadPreferences(preferences);
       this._applyTheme(this.theme);
+      this._refreshAllCaches();
 
       // Reactively reapply theme when it changes
       this.$watch('theme', val => this._applyTheme(val));
 
-      // Persist UI preference changes back to the database file
+      // Persist UI preference changes and refresh dependent view caches
       this.$watch('tagFilter',   val => { this.preferences.tagFilter   = val; this._saveDatabase(); });
       this.$watch('listGroupBy', val => { this.preferences.listGroupBy = val; this._saveDatabase(); });
+
+      // Search query only re-filters; no persistence needed
+      this.$watch('searchQuery', () => {
+        this._refreshVisibleTasks();
+        this._refreshKanbanTasks();
+        this._refreshColumns();
+        this._refreshGroupedList();
+        this._refreshSearchSuggestions();
+      });
 
       // Global error handlers — show error toast on unhandled errors
       window.onerror = (msg) => { this.errorMsg = String(msg); return false; };
@@ -2302,17 +2222,24 @@ function kanbanApp() {
     },
 
     snippet(task) {
-      const body = extractBody(task.raw);
+      const key = task.id + '|' + task.raw;
+      if (this._snippetCache.has(key)) return this._snippetCache.get(key);
+      const body  = extractBody(task.raw);
       const words = body.split(/\s+/).filter(Boolean);
-      const text = words.slice(0, SNIPPET_WORDS).join(' ');
-      return words.length > SNIPPET_WORDS ? text + '…' : text;
+      const text  = words.slice(0, SNIPPET_WORDS).join(' ');
+      const value = words.length > SNIPPET_WORDS ? text + '…' : text;
+      this._snippetCache.set(key, value);
+      return value;
     },
 
     /* ── Tag color palette ── */
     tagHue(tag) {
+      if (this._tagHueCache.has(tag)) return this._tagHueCache.get(tag);
       let h = 0;
       for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) % 360;
-      return Math.round(h / 30) * 30;
+      const hue = Math.round(h / 30) * 30;
+      this._tagHueCache.set(tag, hue);
+      return hue;
     },
 
     /** Select a tag suggestion: set search, close dropdown, scroll first matching task into view. */
@@ -2432,6 +2359,7 @@ function kanbanApp() {
       if (this._externalUpdate) return;
       this.rawText = serializeDatabase(this.tasks, this.preferences);
       saveToStorage(this.rawText);
+      this._refreshAllCaches();
     },
 
     /** Reload in-memory state from a raw text string (called on storage events from other tabs). */
@@ -2443,10 +2371,15 @@ function kanbanApp() {
       this.preferences = preferences;
       this._loadPreferences(preferences);
       this._applyTheme(this.theme);
+      this._snippetCache.clear();
+      this._refreshAllCaches();
       this._externalUpdate = false;
     },
 
     autosave() {
+      // Refresh view caches immediately so the UI reflects the change without waiting
+      // for the debounced save. The deferred call only persists to storage.
+      this._refreshAllCaches();
       clearTimeout(_autosaveTimer);
       _autosaveTimer = setTimeout(() => {
         this._saveDatabase();
@@ -2486,6 +2419,7 @@ function kanbanApp() {
         const allParsedTags = [...new Set(tasks.flatMap(t => t.tags))];
         this._syncTagOrder(allParsedTags);
         this._applyTaskOrderForAllTags();
+        this._snippetCache.clear();
         this._saveDatabase();
         // Sync raw editor so the Raw view shows the freshly imported content
         this.rawDraft  = this.rawText;
@@ -2511,6 +2445,7 @@ function kanbanApp() {
       const allParsedTags = [...new Set(tasks.flatMap(t => t.tags))];
       this._syncTagOrder(allParsedTags);
       this._applyTaskOrderForAllTags();
+      this._snippetCache.clear();
       this._saveDatabase();
       this.rawDraft  = this.rawText;
       this.rawEdited = false;
@@ -2900,6 +2835,112 @@ function kanbanApp() {
         const ordered = this._orderedTasksForTag(tag, this.tasks.filter(t => t.tags.includes(tag)));
         this._applyTaskOrder(tag, ordered);
       }
+    },
+
+    /* ─────────────────────────────────────────────────
+       CACHE REFRESH  (explicit computed-state updates)
+       Replaces Alpine getter functions with explicit state properties.
+       Each _refreshX() recomputes one cache slice; _refreshAllCaches()
+       runs them all in dependency order.
+       ───────────────────────────────────────────────── */
+
+    /** columnsTagList: tagOrder entries first, then alphabetically sorted extras. */
+    _refreshColumnsTagList() {
+      const order    = (Array.isArray(this.tagOrder) ? this.tagOrder : []).filter(t => t !== '__untagged__');
+      const taskTags = new Set(this.tasks.flatMap(t => t.tags));
+      const extra    = [...taskTags].filter(t => !order.includes(t)).sort();
+      this.columnsTagList = [...order, ...extra];
+    },
+
+    /** visibleTasks (newest first) and visibleTasksAsc (oldest first), filtered by search. */
+    _refreshVisibleTasks() {
+      this.visibleTasks    = this._applySearchFilter([...this.tasks].reverse());
+      this.visibleTasksAsc = this._applySearchFilter([...this.tasks]);
+    },
+
+    /** kanbanTasks: visibleTasks narrowed to the active tagFilter. */
+    _refreshKanbanTasks() {
+      let result = [...this.visibleTasks];
+      const tf = this.tagFilter;
+      if (tf === 'all') {
+        result = result.filter(t => t.tags.length > 0);
+      } else if (tf !== 'none') {
+        const tags = Array.isArray(tf) ? tf : [tf];
+        result = result.filter(t => tags.some(tag => t.tags.includes(tag)));
+      }
+      this.kanbanTasks = result;
+    },
+
+    /** columns: one column per visible tag plus the untagged sentinel when needed. */
+    _refreshColumns() {
+      const tf = this.tagFilter;
+      if (tf === 'none') {
+        this.columns = [{ tag: '', tasks: this._orderedTasksForTag('', this.kanbanTasks) }];
+        return;
+      }
+      const rawTags = tf === 'all' ? this.columnsTagList
+                    : Array.isArray(tf) ? tf
+                    : [tf];
+      const tags = rawTags.filter(t => t !== '__untagged__');
+      const cols = tags.map(tag => ({
+        tag,
+        tasks: this._orderedTasksForTag(tag, this.kanbanTasks.filter(t => t.tags.includes(tag))),
+      }));
+      const untaggedTasks = this.visibleTasks.filter(t => t.tags.length === 0);
+      if (untaggedTasks.length > 0 || !this.tasks.length) {
+        cols.push({ tag: '__untagged__', tasks: this._orderedTasksForTag('__untagged__', untaggedTasks) });
+      }
+      this.columns = cols;
+    },
+
+    /** groupedList: one group per active list-group tag plus the untagged group. */
+    _refreshGroupedList() {
+      const lg = this.listGroupBy;
+      if (lg === 'none') {
+        this.groupedList = [{ group: '', tasks: this.visibleTasksAsc }];
+        return;
+      }
+      const isSearching = Boolean(this.searchQuery && this.searchQuery.trim());
+      if (lg === 'all') {
+        const result = [];
+        for (const tag of this.columnsTagList) {
+          const tasks = this._orderedTasksForTag(tag, this.visibleTasks.filter(t => t.tags.includes(tag)));
+          if (isSearching || tasks.length) result.push({ group: tag, tasks });
+        }
+        const untagged = this._orderedTasksForTag('__untagged__', this.visibleTasks.filter(t => t.tags.length === 0));
+        if (isSearching || untagged.length || !this.tasks.length) result.push({ group: 'untagged', tasks: untagged });
+        this.groupedList = result;
+        return;
+      }
+      const tags = Array.isArray(lg) ? lg : [lg];
+      const result = [];
+      for (const tag of tags) {
+        const tasks = this._orderedTasksForTag(tag, this.visibleTasks.filter(t => t.tags.includes(tag)));
+        if (isSearching || tasks.length) result.push({ group: tag, tasks });
+      }
+      // Untagged group: only tasks with no tags at all (not merely lacking the selected tags)
+      const untagged = this._orderedTasksForTag('__untagged__', this.visibleTasks.filter(t => t.tags.length === 0));
+      if (isSearching || untagged.length || !this.tasks.length) result.push({ group: 'untagged', tasks: untagged });
+      this.groupedList = result;
+    },
+
+    /** searchSuggestions: columnsTagList filtered by the active search query. */
+    _refreshSearchSuggestions() {
+      const q = this.searchQuery.toLowerCase().trim();
+      this.searchSuggestions = q ? this.columnsTagList.filter(t => t.includes(q)) : [...this.columnsTagList];
+    },
+
+    /**
+     * Recompute all cached view state in dependency order.
+     * Must be called after every mutation that affects the data model.
+     */
+    _refreshAllCaches() {
+      this._refreshColumnsTagList();
+      this._refreshVisibleTasks();
+      this._refreshKanbanTasks();
+      this._refreshColumns();
+      this._refreshGroupedList();
+      this._refreshSearchSuggestions();
     },
 
     addTaskToColumn(tag) {
