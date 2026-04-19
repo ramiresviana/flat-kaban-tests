@@ -2482,6 +2482,7 @@ function kanbanApp() {
         this._loadPreferences(preferences);
         const allParsedTags = [...new Set(tasks.flatMap(t => t.tags))];
         this._syncTagOrder(allParsedTags);
+        this._applyTaskOrderForAllTags();
         this._saveDatabase();
         // Sync raw editor so the Raw view shows the freshly imported content
         this.rawDraft  = this.rawText;
@@ -2506,6 +2507,7 @@ function kanbanApp() {
       this._loadPreferences(preferences);
       const allParsedTags = [...new Set(tasks.flatMap(t => t.tags))];
       this._syncTagOrder(allParsedTags);
+      this._applyTaskOrderForAllTags();
       this._saveDatabase();
       this.rawDraft  = this.rawText;
       this.rawEdited = false;
@@ -2813,17 +2815,27 @@ function kanbanApp() {
     },
 
     /** Central helper that rebuilds a task's raw block after a tag/title change. */
+    /** Central helper that rebuilds a task's raw block after a tag/title change.
+     * Also recomputes per-tag positions for all tags whose membership changed,
+     * keeping column ranks contiguous. */
     _applyTagUpdate(task, newTags) {
-      const body = extractBody(task.raw);
-      // Only preserve positions for tags that remain in newTags
+      const body    = extractBody(task.raw);
+      const oldTags = task.tags;
+      // Preserve positions only for tags that remain in newTags
       const positions = Object.fromEntries(
         newTags
           .filter(t => task.tagPositions?.[t] !== undefined)
           .map(t => [t, task.tagPositions[t]])
       );
-      task.tags = newTags;
+      task.tags        = newTags;
       task.tagPositions = positions;
-      task.raw   = buildTaskRaw(task.title, newTags, body, positions);
+      task.raw         = buildTaskRaw(task.title, newTags, body, positions);
+      // Recompute contiguous positions for every tag whose membership changed
+      const affected = [...new Set([...oldTags, ...newTags])];
+      for (const tag of affected) {
+        const ordered = this._orderedTasksForTag(tag, this.tasks.filter(t => t.tags.includes(tag)));
+        this._applyTaskOrder(tag, ordered);
+      }
       this.autosave();
     },
 
@@ -2865,12 +2877,26 @@ function kanbanApp() {
     
 
     /** Append any candidateTags not yet in tagOrder (sorted). */
+    /** Append any candidateTags not yet in tagOrder (sorted). */
     _syncTagOrder(candidateTags) {
       const order = Array.isArray(this.tagOrder) ? this.tagOrder : [];
       const added = candidateTags.filter(t => !order.includes(t)).sort();
       if (!added.length) return;
       this.tagOrder             = [...order, ...added];
       this.preferences.tagOrder = this.tagOrder;
+    },
+
+    /**
+     * Stamp contiguous per-tag positions on every task in the database.
+     * Called after import, raw-save, or any bulk operation that may leave
+     * position numbers missing or non-contiguous.
+     */
+    _applyTaskOrderForAllTags() {
+      const allTags = [...new Set(this.tasks.flatMap(t => t.tags))];
+      for (const tag of allTags) {
+        const ordered = this._orderedTasksForTag(tag, this.tasks.filter(t => t.tags.includes(tag)));
+        this._applyTaskOrder(tag, ordered);
+      }
     },
 
     addTaskToColumn(tag) {
