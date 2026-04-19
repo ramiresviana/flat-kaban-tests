@@ -979,8 +979,6 @@
       tab-size: 2;
     }
 
-
-
     /* ─────────────────────────────────────────────
        COMBOBOX
        ───────────────────────────────────────────── */
@@ -1621,8 +1619,8 @@
                 @click="discardRaw()"
                 :disabled="!rawEdited"
                 aria-label="Discard raw changes">Discard</button>
-        <div style="flex:1"></div>
         <span x-show="rawEdited" class="unsaved-badge" role="status" aria-live="polite">Unsaved changes</span>
+        <div style="flex:1"></div>
         <button class="btn-secondary"
                 @click="exportFile()"
                 aria-label="Export database">Export</button>
@@ -1877,9 +1875,12 @@ function parseDatabase(text) {
     }
   }
 
-  const tasks = mainText
+  const rawTasks = mainText
     .split(TASK_SEP)
-    .map((block, i) => parseTask(block, i + 1));
+    .map((block, i) => parseTask(block, i + 1))
+    .filter(t => t.raw !== '');                  // discard tombstones from legacy databases
+  rawTasks.forEach((t, i) => { t.id = i + 1; }); // re-assign sequential IDs after filter
+  const tasks = rawTasks;
 
   return { tasks, preferences: parsePreferences(prefText) };
 }
@@ -1947,9 +1948,6 @@ function buildTaskRaw(title, tags, body, tagPositions = {}) {
   }
   const escaped = body ? escapeBody(body.trim()) : '';
   if (escaped) parts.push(escaped);
-  // An empty task (no title, no tags, no body) uses a single newline as a live-task
-  // marker to distinguish it from a soft-deleted tombstone (raw = '').
-  if (!parts.length) return '\n';
   return parts.join('\n');
 }
 
@@ -2132,12 +2130,12 @@ function kanbanApp() {
 
     /* ── Computed: tasks filtered by searchQuery only — newest first ── */
     get visibleTasks() {
-      return this._applySearchFilter([...this.tasks].reverse().filter(t => t.raw !== ''));
+      return this._applySearchFilter([...this.tasks].reverse());
     },
 
     /* ── Computed: live tasks in insertion order (oldest first) for list/none mode ── */
     get visibleTasksAsc() {
-      return this._applySearchFilter(this.tasks.filter(t => t.raw !== ''));
+      return this._applySearchFilter([...this.tasks]);
     },
 
     /** Filter tasks by the current searchQuery. Returns the input array filtered in-place. */
@@ -2182,10 +2180,9 @@ function kanbanApp() {
       }));
 
       // Append the untagged column when there are untagged tasks OR when there are no
-      // live tasks at all (so users always have a column to add their first task).
-      const hasLiveTasks = this.tasks.some(t => t.raw !== '');
+      // tasks at all (so users always have a column to add their first task).
       const untaggedTasks = this.visibleTasks.filter(t => t.tags.length === 0);
-      if (untaggedTasks.length > 0 || !hasLiveTasks) {
+      if (untaggedTasks.length > 0 || !this.tasks.length) {
         cols.push({ tag: '__untagged__', tasks: this._orderedTasksForTag('__untagged__', untaggedTasks) });
       }
 
@@ -2195,7 +2192,6 @@ function kanbanApp() {
     /* ── Computed: grouped task list ── */
     get groupedList() {
       const lg = this.listGroupBy;
-      const hasLiveTasks = this.tasks.some(t => t.raw !== '');
 
       if (lg === 'none') {
         return [{ group: '', tasks: this.visibleTasksAsc }];
@@ -2208,7 +2204,7 @@ function kanbanApp() {
           if (isSearching || tasks.length) result.push({ group: tag, tasks });
         }
         const untagged = this._orderedTasksForTag('__untagged__', this.visibleTasks.filter(t => t.tags.length === 0));
-        if (isSearching || untagged.length || !hasLiveTasks) result.push({ group: 'untagged', tasks: untagged });
+        if (isSearching || untagged.length || !this.tasks.length) result.push({ group: 'untagged', tasks: untagged });
         return result;
       }
       const tags = Array.isArray(lg) ? lg : [lg];
@@ -2220,7 +2216,7 @@ function kanbanApp() {
       }
       // Untagged group: only tasks with NO tags at all (not merely lacking the selected tags)
       const untagged = this._orderedTasksForTag('__untagged__', this.visibleTasks.filter(t => t.tags.length === 0));
-      if (isSearching || untagged.length || !hasLiveTasks) result.push({ group: 'untagged', tasks: untagged });
+      if (isSearching || untagged.length || !this.tasks.length) result.push({ group: 'untagged', tasks: untagged });
       return result;
     },
 
@@ -2603,11 +2599,15 @@ function kanbanApp() {
       this.selectedTask = null;
       this.tagCb.search = '';
       this.tagCb.open   = false;
-      // Soft-delete: blank the raw block so indices remain stable across reloads.
-      // The blank block is preserved in storage but not re-instantiated on parse.
-      task.raw   = '';
-      task.title = null;
-      task.tags  = [];
+      // Hard-delete: remove the task from the array and recompute positions for
+      // every tag it belonged to so column ranks remain contiguous.
+      const removedTags = [...task.tags];
+      const idx = this.tasks.findIndex(t => t.id === task.id);
+      if (idx !== -1) this.tasks.splice(idx, 1);
+      for (const tag of removedTags) {
+        const remaining = this._orderedTasksForTag(tag, this.tasks.filter(t => t.tags.includes(tag)));
+        this._applyTaskOrder(tag, remaining);
+      }
       this._saveDatabase();
     },
 
@@ -2858,7 +2858,6 @@ function kanbanApp() {
     _applyTaskOrder(tag, tasks) {
       if (!tag || tag === '__untagged__') return;
       tasks.forEach((task, index) => {
-        if (task.raw === '') return;
         task.tagPositions = { ...(task.tagPositions ?? {}), [tag]: index };
         task.raw = buildTaskRaw(task.title, task.tags, extractBody(task.raw), task.tagPositions);
       });
@@ -2877,14 +2876,14 @@ function kanbanApp() {
     addTaskToColumn(tag) {
       const newId = this.tasks.length ? Math.max(...this.tasks.map(t => t.id)) + 1 : 1;
       const tags  = (tag && tag !== '__untagged__') ? [tag] : [];
-      const tagPositions = {};
-      if (tags.length) {
-        const count = this.tasks.filter(t => t.raw !== '' && t.tags.includes(tags[0])).length;
-        tagPositions[tags[0]] = count; // append at end of column
-      }
-      const raw  = buildTaskRaw(null, tags, '', tagPositions);
-      const task = { id: newId, raw, title: null, tags, tagPositions };
+      const raw   = buildTaskRaw(null, tags, '', {});
+      const task  = { id: newId, raw, title: null, tags, tagPositions: {} };
       this.tasks.push(task);
+      // Stamp the new task's position at the end of its tag column
+      for (const t of tags) {
+        const ordered = this._orderedTasksForTag(t, this.tasks.filter(tk => tk.tags.includes(t)));
+        this._applyTaskOrder(t, ordered);
+      }
       this.autosave();
       this.openTask(task);
     },
