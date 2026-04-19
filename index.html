@@ -1779,6 +1779,9 @@ const SNIPPET_WORDS         = 20;
 const TITLE_FALLBACK_WORDS  = 8;
 const AUTOSCROLL_EDGE_PX    = 150;  // px from edge to start scrolling
 const AUTOSCROLL_MAX_PX     = 18;  // max px scrolled per animation frame
+const INERTIA_DECAY              = 0.92;  // velocity multiplier per animation frame
+const INERTIA_MIN_PX             = 0.5;   // stop animating below this px/frame
+const INERTIA_VELOCITY_WINDOW_MS = 100;   // rolling window for velocity sampling (ms)
 
 /* ─────────────────────────────────────────────────
    PARSER  (text → model)
@@ -3033,32 +3036,49 @@ function kanbanApp() {
       const board     = this.$refs.kanbanBoard;
       const startX    = event.pageX;
       const startLeft = board.scrollLeft;
-      let lastX       = event.pageX;
-      let velocity    = 0;
       this.boardPanning = true;
 
+      // Rolling sample buffer for time-corrected velocity (px / ms)
+      const samples = [];
+
       const onMove = (e) => {
-        velocity         = e.pageX - lastX;
-        lastX            = e.pageX;
+        samples.push({ x: e.pageX, t: performance.now() });
+        // Prune samples outside the velocity window to keep only recent movement
+        const cutoff = performance.now() - INERTIA_VELOCITY_WINDOW_MS;
+        while (samples.length > 1 && samples[0].t < cutoff) samples.shift();
         board.scrollLeft = startLeft - (e.pageX - startX);
       };
+
       const onUp = () => {
         this.boardPanning = false;
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup',   onUp);
-        // Inertia: keep scrolling with exponential decay after release
-        let v = -velocity;
-        const animate = () => {
-          if (Math.abs(v) < 0.5) return;
-          board.scrollLeft += v;
-          v *= 0.92;
-          requestAnimationFrame(animate);
-        };
-        requestAnimationFrame(animate);
+        this._startBoardInertia(board, samples);
       };
+
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup',   onUp);
       event.preventDefault();
+    },
+
+    /** Apply fling inertia to the board after a mouse-up, using the sampled velocity. */
+    _startBoardInertia(board, samples) {
+      let vPxMs = 0;
+      if (samples.length >= 2) {
+        const first = samples[0];
+        const last  = samples[samples.length - 1];
+        const dt    = last.t - first.t;
+        if (dt > 0) vPxMs = (last.x - first.x) / dt;
+      }
+      // Convert px/ms to px/frame at 60 fps
+      let v = -vPxMs * (1000 / 60);
+      const animate = () => {
+        if (Math.abs(v) < INERTIA_MIN_PX) return;
+        board.scrollLeft += v;
+        v *= INERTIA_DECAY;
+        requestAnimationFrame(animate);
+      };
+      requestAnimationFrame(animate);
     },
 
     /** Translate vertical wheel events into horizontal board scroll. */
