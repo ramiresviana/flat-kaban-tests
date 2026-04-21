@@ -1,0 +1,10 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Flat Kanban",
+  "outputfilename": "flat-kanban",
+  "frontend:build": "cp ../../index.html .",
+  "author": {
+    "name": "Ramires Viana",
+    "email": "59319979+ramiresviana@users.noreply.github.com"
+  }
+}
