@@ -26,14 +26,12 @@ jobs:
           jq --arg v "$VERSION" '.info.productVersion = $v' wails/wails.json > wails/wails.json.tmp
           mv wails/wails.json.tmp wails/wails.json
 
-      - name: Build Linux
-        working-directory: wails
-        run: go tool wails build -platform linux/amd64 -o flat-kanban-${{ github.ref_name }}
+      # - name: Build Linux
+      #   working-directory: wails
+      #   run: go tool wails build -platform linux/amd64 -o flat-kanban-${{ github.ref_name }}
 
       - name: Build Windows
         working-directory: wails
-        env:
-          CC: x86_64-w64-mingw32-gcc
         run: go tool wails build -platform windows/amd64 -o flat-kanban-${{ github.ref_name }}.exe
 
       - name: Upload artifacts
