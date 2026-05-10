@@ -1,4 +1,4 @@
-# Plain Kanban — Flat Kanban
+# Plain Kanban
 
 A single web page, local-first Kanban app powered by plain text file that runs entirely in the browser.
 

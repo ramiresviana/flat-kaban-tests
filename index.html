@@ -15,7 +15,7 @@
   <script src="https://cdn.jsdelivr.net/npm/feather-icons@4.29.2/dist/feather.min.js"></script>
 
   <!-- Alpine.js v3 — deferred so x-data is ready before DOMContentLoaded -->
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js" crossorigin="anonymous"></script>
 
   <style>
     /* ─────────────────────────────────────────────
@@ -1178,7 +1178,7 @@
   <header id="header" role="banner">
 
     <!-- Logo / title -->
-    <div class="header-logo" aria-label="Flat Kanban">
+    <div class="header-logo" aria-label="Flat Kanban" x-show="displayLogo">
       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
            fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
            stroke-linejoin="round" aria-hidden="true">
@@ -2063,6 +2063,7 @@ function kanbanApp() {
     /* ── State ── */
     currentView:    'kanban',
     theme:          'auto',
+    displayLogo:    true,
     tagFilter:      'all',
     searchQuery:      '',
     searchSuggestOpen: false,
@@ -2143,6 +2144,10 @@ function kanbanApp() {
 
     /* ── Lifecycle ── */
     init() {
+      this._setupGlobalErrorHandlers();
+
+      this.displayLogo = window.wails === undefined;
+
       this.rawText = loadFromStorage();
       if (!this.rawText) {
         const { tasks, preferences } = parseDatabase(DEMO_DATA);
@@ -2152,6 +2157,7 @@ function kanbanApp() {
 
         const allParsedTags = [...new Set(tasks.flatMap(t => t.tags))];
         this._syncTagOrder(allParsedTags);
+        this._applyTaskOrderForAllTags();
 
         this.rawText = serializeDatabase(this.tasks, this.preferences);
       }
@@ -2792,7 +2798,7 @@ function kanbanApp() {
     _orderedTasksForTag(tag, tasks) {
       if (!tag || tag === '__untagged__') return tasks;
       return [...tasks].sort((a, b) => {
-        const posA = a.tagPositions?.[tag] ?? -Infinity;
+        const posA = a.tagPositions?.[tag] ?? Infinity;
         const posB = b.tagPositions?.[tag] ?? Infinity;
         return posA - posB;
       });
