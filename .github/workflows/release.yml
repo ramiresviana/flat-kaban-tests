@@ -17,6 +17,10 @@ jobs:
         with:
           go-version-file: wails/go.mod
 
+      - name: Install Wails CLI
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -31,13 +35,13 @@ jobs:
 
       - name: Build Linux
         working-directory: wails
-        run: go tool wails build -platform linux/amd64 -o flat-kanban-${{ github.ref_name }}
+        run: wails build -platform linux/amd64 -o flat-kanban-${{ github.ref_name }}
 
       - name: Build Windows
         working-directory: wails
         env:
           CC: x86_64-w64-mingw32-gcc
-        run: go tool wails build -platform windows/amd64 -o flat-kanban-${{ github.ref_name }}.exe
+        run: wails build -platform windows/amd64 -o flat-kanban-${{ github.ref_name }}.exe
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
