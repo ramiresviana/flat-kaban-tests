@@ -1,6 +1,9 @@
 name: Release
 
-on: push
+on:
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   build:
@@ -26,9 +29,9 @@ jobs:
           jq --arg v "$VERSION" '.info.productVersion = $v' wails/wails.json > wails/wails.json.tmp
           mv wails/wails.json.tmp wails/wails.json
 
-      # - name: Build Linux
-      #   working-directory: wails
-      #   run: go tool wails build -platform linux/amd64 -o flat-kanban-${{ github.ref_name }}
+      - name: Build Linux
+        working-directory: wails
+        run: go tool wails build -platform linux/amd64 -o flat-kanban-${{ github.ref_name }}
 
       - name: Build Windows
         working-directory: wails
@@ -43,7 +46,6 @@ jobs:
             wails/build/bin/flat-kanban-${{ github.ref_name }}.exe
 
   release:
-    name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
 
@@ -64,3 +66,26 @@ jobs:
             dist/flat-kanban-${{ github.ref_name }}
             dist/flat-kanban-${{ github.ref_name }}.exe
 
+  pages:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pages: write
+
+    steps:
+        - name: Configure Pages
+          uses: actions/configure-pages@v3
+
+        - name: Prepare site directory
+          run: |
+            mkdir -p site
+            cp index.html site/index.html
+
+        - name: Upload Pages artifact
+          uses: actions/upload-pages-artifact@v1
+          with:
+            path: site
+
+        - name: Deploy to GitHub Pages
+          uses: actions/deploy-pages@v1
