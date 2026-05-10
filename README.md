@@ -4,7 +4,7 @@ A single web page, local-first Kanban app powered by plain text file that runs e
 
 ![Plain Kanban screenshot](./screenshot.png)
 
-Try it out at https://ramiresviana.github.io/flat-kanban
+Try it out at https://ramiresviana.github.io/flat-kanban or download the executable version from the [releases page](https://github.com/ramiresviana/flat-kanban/releases).
 
 ## Features
 
