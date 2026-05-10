@@ -3,6 +3,9 @@
   "name": "Flat Kanban",
   "outputfilename": "flat-kanban",
   "frontend:build": "cp ../../index.html .",
+  "info": {
+    "productVersion": "0.0.0"
+  },
   "author": {
     "name": "Ramires Viana",
     "email": "59319979+ramiresviana@users.noreply.github.com"
